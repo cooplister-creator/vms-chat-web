@@ -142,6 +142,53 @@ h2.v{color:var(--ocean);margin:18px 0 0}
   .back{display:inline-block!important}
 }
 .back{display:none;border:0;background:none;font-size:22px;color:var(--text)}
+
+/* компактные размеры */
+header{padding:6px 12px;gap:10px}
+header img.logo{width:40px;height:40px}
+header .t{font-size:16px}
+nav button{padding:8px 6px;font-size:14px}
+.page{padding:12px}
+.wrap{max-width:1180px}
+.tb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;margin-bottom:10px}
+.tb b{font-size:16px;margin-right:auto}
+.tb label{display:flex;gap:6px;align-items:center;background:#ffffff1f;padding:5px 12px;border-radius:16px;cursor:pointer;font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.grid2.one{grid-template-columns:minmax(0,760px)}
+@media (max-width:1000px){.grid2{grid-template-columns:1fr}}
+.blk{background:var(--card);border-radius:14px;padding:12px 14px}
+.bt{font-weight:700;color:var(--navy);font-size:16px;margin-bottom:8px}
+@media (prefers-color-scheme:dark){.bt{color:#9ecbff}}
+.ctrl{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.ctrl>div{flex:1;min-width:150px}
+.ctrl label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:3px}
+select.sel{padding:7px 10px;border-radius:10px;background:var(--bg)}
+.seg{margin:0;gap:4px}
+.seg button{padding:7px 4px;font-size:13px;border-radius:10px}
+.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+@media (max-width:640px){.vgrid{grid-template-columns:1fr}}
+h2.v{margin:6px 0 2px;font-size:14px;color:var(--ocean)}
+.rc{display:flex;gap:10px;align-items:center;padding:7px 10px;margin:4px 0;border-radius:10px;background:var(--bg)}
+.rc.best{background:var(--gold)}
+.rc .p{font-size:16px;font-weight:700;min-width:96px;white-space:nowrap}
+.rc .c1{font-weight:600;font-size:14px;line-height:1.2}
+.rc .sm{font-size:12px;opacity:.75;line-height:1.2}
+.demo{margin-bottom:6px}
+.note{font-size:11px;color:var(--muted);margin-top:8px}
+.dept>.dh{padding:8px 14px}
+.row{padding:8px 12px}
+/* юристы */
+.cn{background:var(--card);border-radius:12px;padding:10px 14px;margin:8px 0;border-left:4px solid #f5b400}
+.cn.approved{border-left-color:#2e7d32}.cn.revision{border-left-color:#ef6c00}.cn.rejected{border-left-color:#c62828}
+.cn .tt{font-weight:700}
+.cn .sm{font-size:12px;color:var(--muted)}
+.cn .fl{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.cn .fl a{background:var(--bg);border-radius:14px;padding:3px 10px;font-size:13px;cursor:pointer;color:var(--ocean)}
+.cn .cm{background:var(--bg);border-radius:8px;padding:6px 10px;margin:6px 0;font-size:14px}
+.cn .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.btn.sm2{padding:6px 12px;font-size:13px;border-radius:10px}
+.btn.green{background:#2e7d32}.btn.orange{background:#ef6c00}
+.lbl{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:8px 0 2px}
 </style>
 </head>
 <body>
@@ -328,7 +375,7 @@ function buildShell() {
   const app = $("#app"); app.innerHTML = "";
   headEl = h("header", {});
   const nav = h("nav", {});
-  [["chats", "💬 Чаты"], ["alerts", "🚨 Срочные"], ["calc", "🚢 Расчёт"], ["depts", "🏢 Отделы"], ["bot", "🤖 Помощник"]].forEach(([k, t]) =>
+  [["chats", "💬 Чаты"], ["alerts", "🚨 Срочные"], ["calc", "🚢 Расчёт"], ["depts", "🏢 Отделы"], ["legal", "⚖️ Юристы"], ["bot", "🤖 Помощник"]].forEach(([k, t]) =>
     nav.append(h("button", { "data-t": k, class: k === tab ? "on" : "", onclick: () => { tab = k; [...nav.children].forEach(b => b.classList.toggle("on", b.dataset.t === k)); renderTab(); } }, t)));
   app.append(headEl, nav, h("main", { id: "main" }));
   refreshHead(); renderTab();
@@ -340,7 +387,7 @@ function refreshHead() {
   headEl.append(h("img", { class: "logo", src: LOGO }),
     h("div", {}, h("div", { class: "t" }, "ВМС Групп Chat"), h("div", { id: "rates", class: "rates" }), h("div", { id: "rinfo", class: "rinfo" })),
     h("div", { class: "sp" }),
-    h("button", { class: "hbtn", title: "Новый чат", onclick: newChatDialog }, "＋"),
+    h("button", { class: "hbtn", title: "Создать", onclick: plusMenu }, "＋"),
     h("div", { style: "cursor:pointer", onclick: myProfile }, avatar(u.name || myName, u.photo, 40)));
   paintRates();
 }
@@ -350,6 +397,7 @@ function renderTab() {
   else if (tab === "alerts") buildAlerts(m);
   else if (tab === "calc") buildCalc(m);
   else if (tab === "depts") buildDepts(m);
+  else if (tab === "legal") buildLegal(m);
   else if (tab === "bot") buildBot(m);
 }
 
@@ -400,8 +448,18 @@ function contactCard(u) {
       h("div", { class: "line" }, "✉️", u.email ? h("a", { href: "mailto:" + u.email }, u.email) : h("span", { style: "color:var(--muted)" }, "Почта не указана"))),
     u.uid !== me.uid ? h("button", { class: "btn full", onclick: () => { close(); openDirect(u); } }, "💬 Написать в чат") : null,
     u.uid !== me.uid && u.email ? h("button", { class: "btn ghost full", onclick: () => { close(); location.href = "mailto:" + u.email; } }, "✉️ Написать письмо") : null,
+    isAdmin ? h("button", { class: "btn ghost full", onclick: () => { close(); assignDialog(u); } }, "✎ Отдел, офис, должность") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Закрыть"));
   close = modal(body);
+}
+function assignDialog(u) {
+  let close;
+  const dep = h("select", { class: "sel" }, h("option", { value: "" }, "Без отдела"), ...DEPTS.map(d => h("option", { value: d[0], selected: u.dept === d[0] }, d[2] + " " + d[1])));
+  const off = h("select", { class: "sel" }, ...[["", "Не указан"], ["ВЛК", "Владивосток (ВЛК)"], ["МСК", "Москва (МСК)"]].map(([k, v]) => h("option", { value: k, selected: (u.office || "") === k }, v)));
+  const pos = h("input", { class: "field", placeholder: "Должность", value: u.position || "" });
+  close = modal(h("div", {}, h("h3", {}, u.name), h("span", { class: "lbl" }, "Отдел"), dep, h("span", { class: "lbl" }, "Офис"), off, h("span", { class: "lbl" }, "Должность"), pos,
+    h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
+    h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
 function myProfile() {
   const u = USERS[me.uid] || { uid: me.uid, name: myName, email: me.email };
@@ -413,6 +471,28 @@ function myProfile() {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(me.uid).set({ phone: $("#ph").value.trim() }, { merge: true }); toast("Сохранено"); } }, "Сохранить телефон"),
     h("button", { class: "btn red full", onclick: () => { close(); auth.signOut(); } }, "Выйти"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Закрыть"));
+  close = modal(body);
+}
+function plusMenu() {
+  let close;
+  const it = (tx, f) => h("button", { class: "mi", onclick: () => { close(); f(); } }, tx);
+  close = modal(h("div", { class: "menu" }, h("h3", {}, "Создать"), it("💬  Новый чат", newChatDialog), it("👥  Новая группа", newGroupDialog), it("✉️  Написать письмо", () => mailDialog(""))));
+}
+function newGroupDialog() {
+  let close; const picked = new Set();
+  const name = h("input", { class: "field", placeholder: "Название группы" });
+  const list = staff().filter(u => u.uid !== me.uid).sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
+  const body = h("div", {}, h("h3", {}, "Новая группа"), name, h("div", { class: "lbl" }, "Участники"),
+    ...list.map(u => h("label", { class: "row", style: "cursor:pointer" }, h("input", { type: "checkbox", onchange: e => e.target.checked ? picked.add(u.uid) : picked.delete(u.uid) }),
+      avatar(u.name, u.photo, 32), h("div", { class: "n" }, u.name))),
+    h("button", { class: "btn full", onclick: async () => {
+      if (!name.value.trim()) return toast("Введите название");
+      if (!picked.size) return toast("Выберите участников");
+      const ref = db.collection("rooms").doc();
+      await ref.set({ type: "group", name: name.value.trim(), members: [...picked, me.uid] });
+      close(); tab = "chats"; renderTab();
+      selectRoom({ id: ref.id, type: "group", name: name.value.trim(), members: [...picked, me.uid], lastText: "", lastTime: 0, lastName: "", lastUid: "", unread: 0 });
+    } }, "Создать группу"));
   close = modal(body);
 }
 function newChatDialog() {
@@ -469,7 +549,9 @@ function selectRoom(r) {
     h("button", { class: "back", onclick: () => { curRoom = null; m.classList.remove("chatopen"); renderChatList(); } }, "←"),
     h("div", { style: "display:flex;gap:10px;align-items:center;cursor:" + (o ? "pointer" : "default"), onclick: () => o && contactCard(o) },
       avatar(t, o ? o.photo : r.photo, 40), h("div", {}, h("div", { class: "tt" }, t),
-        h("div", { class: "ss" }, o ? (online(o) ? "в сети" : "не в сети") : "в сети: " + onlineCount)))));
+        h("div", { class: "ss" }, o ? (online(o) ? "в сети" : "не в сети") : "в сети: " + onlineCount))),
+    h("div", { class: "sp" }),
+    isAdmin && r.id !== "general" ? h("button", { class: "ibtn", style: "width:36px;height:36px;font-size:18px", title: "Управление чатом", onclick: () => roomManage(r) }, "⋯") : null));
   pane.append(h("div", { class: "msgs", id: "msgs" }));
   pane.append(buildComposer(r));
   renderChatList();
@@ -531,6 +613,25 @@ function renderMsgs(r) {
   });
   if (near) box.scrollTop = box.scrollHeight;
   if (!box._init) { box.scrollTop = box.scrollHeight; box._init = true; }
+}
+function roomManage(r) {
+  let close;
+  const it = (tx, f, cls) => h("button", { class: "mi " + (cls || ""), onclick: () => { close(); f(); } }, tx);
+  close = modal(h("div", { class: "menu" }, h("h3", {}, roomTitle(r)),
+    r.type !== "direct" ? it("✎  Переименовать", () => { const n = prompt("Новое название", r.name); if (n && n.trim()) db.collection("rooms").doc(r.id).update({ name: n.trim() }); }) : null,
+    it("🧹  Очистить переписку", () => { if (confirm("Удалить все сообщения чата?")) clearRoom(r, false); }, "red"),
+    it("🗑  Удалить чат", () => { if (confirm("Удалить чат целиком?")) clearRoom(r, true); }, "red")));
+}
+async function clearRoom(r, del) {
+  try {
+    for (let i = 0; i < 20; i++) {
+      const s = await msgCol(r).limit(400).get(); if (s.empty) break;
+      const b = db.batch(); s.forEach(d => b.delete(d.ref)); await b.commit();
+    }
+    if (del) { await db.collection("rooms").doc(r.id).delete(); curRoom = null; renderTab(); }
+    else await db.collection("rooms").doc(r.id).update({ lastText: "", lastTime: 0, lastName: "", lastUid: "" });
+    toast(del ? "Чат удалён" : "Переписка очищена");
+  } catch (e) { toast("Не удалось: " + (e.message || "")); }
 }
 function lightbox(b64) {
   const ov = h("div", { class: "ov", onclick: () => ov.remove() }, h("img", { src: "data:image/jpeg;base64," + b64, style: "max-width:94vw;max-height:94vh;border-radius:8px" }));
@@ -692,50 +793,54 @@ function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
     w.innerHTML = "";
-    w.append(h("div", { class: "hd" }, h("b", { style: "font-size:20px" }, "Расчёт ставки"), h("div", { style: "opacity:.75;font-size:13px" }, "Выберите, что считать · чистые ставки")));
-    w.append(h("div", { class: "chk" },
+    w.append(h("div", { class: "tb" }, h("b", {}, "Расчёт ставки · чистые ставки"),
       h("label", {}, h("input", { type: "checkbox", checked: calc.rail, onchange: e => { calc.rail = e.target.checked; draw(); } }), "🚆 ЖД"),
       h("label", {}, h("input", { type: "checkbox", checked: calc.freight, onchange: e => { calc.freight = e.target.checked; draw(); } }), "🚢 Фрахт")));
     if (!calc.rail && !calc.freight) w.append(h("div", { style: "color:var(--muted)" }, "Отметьте ЖД и/или Фрахт"));
-    if (calc.freight) w.append(freightBlock(draw));
-    if (calc.rail) w.append(railBlock(draw));
+    const g = h("div", { class: "grid2" + (calc.rail && calc.freight ? "" : " one") });
+    if (calc.freight) g.append(freightBlock(draw));
+    if (calc.rail) g.append(railBlock(draw));
+    w.append(g);
   };
   draw();
 }
 function seg(names, cur, on) { return h("div", { class: "seg" }, ...names.map((n, i) => h("button", { class: cur === i ? "on" : "", onclick: () => on(i) }, n))); }
+function ctrl(label, el) { return h("div", {}, h("label", {}, label), el); }
 function card(i, price, l1, l2, l3) {
-  return h("div", { class: "rc" + (i === 0 ? " best" : "") }, i === 0 ? h("div", { class: "b" }, "★ Лучшая цена") : null,
-    h("div", { class: "p" }, price), h("div", { style: "font-weight:600" }, l1), h("div", { class: "sm" }, l2), h("div", { class: "sm" }, l3));
+  return h("div", { class: "rc" + (i === 0 ? " best" : "") }, h("div", { class: "p" }, price),
+    h("div", {}, h("div", { class: "c1" }, (i === 0 ? "★ " : "") + l1), h("div", { class: "sm" }, l2 + " · " + l3)));
 }
+const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
 function railBlock(draw) {
   const cities = [...new Set(RATES.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
-  const d = h("div", { style: "margin-bottom:24px" }, h("h2", { style: "margin:0 0 8px;color:var(--navy)" }, "🚆 Железная дорога"),
-    h("div", { style: "font-size:13px;font-weight:600" }, "Куда"),
-    h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c))),
-    h("div", { style: "font-size:13px;font-weight:600;margin-top:12px" }, "Контейнер"),
-    seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }));
+  const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление Владивосток"),
+    h("div", { class: "ctrl" },
+      ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c)))),
+      ctrl("Контейнер", seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }))));
+  const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
-    d.append(h("h2", { class: "v" }, "НДС " + vat + "%"));
+    const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
     const list = RATES.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => a.price - b.price);
-    if (!list.length) d.append(h("div", { style: "color:var(--muted)" }, "Нет данных"));
-    list.forEach((r, i) => d.append(card(i, money(r.price), r.contractor, r.station, "Действует: с " + r.from + " по " + r.to)));
+    if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
+    list.forEach((r, i) => col.append(card(i, money(r.price), r.contractor, r.station, per(r))));
+    vg.append(col);
   });
-  d.append(h("div", { style: "font-size:11px;color:var(--muted);margin-top:12px" }, "Цены без ВОХР, ПРР и надбавок. Ставки обновлены: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента."));
+  d.append(vg, h("div", { class: "note" }, "Без ВОХР, ПРР и надбавок. Обновлено: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента."));
   return d;
 }
 function freightBlock(draw) {
   const ports = [...new Set(FREIGHT_DEMO.map(r => r.port))].sort((a, b) => a.localeCompare(b, "ru"));
-  const d = h("div", { style: "margin-bottom:24px" }, h("h2", { style: "margin:0;color:var(--navy)" }, "🚢 Морской фрахт"),
+  const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚢 Морской фрахт → Владивосток"),
     h("div", { class: "demo" }, "ДЕМО: тестовые цифры, не реальные ставки"),
-    h("div", { style: "font-size:13px;font-weight:600;margin-top:8px" }, "Порт отправления"),
-    h("select", { class: "sel", onchange: e => { calc.port = e.target.value; draw(); } }, ...ports.map(c => h("option", { value: c, selected: c === calc.port }, c))),
-    h("div", { style: "font-size:13px;font-weight:600;margin-top:8px" }, "Порт назначения"),
-    h("select", { class: "sel", disabled: true }, h("option", {}, "Владивосток")),
-    h("div", { style: "font-size:13px;font-weight:600;margin-top:12px" }, "Контейнер"),
-    seg(FREIGHT_TYPES, calc.ftype, i => { calc.ftype = i; draw(); }));
+    h("div", { class: "ctrl" },
+      ctrl("Порт отправления", h("select", { class: "sel", onchange: e => { calc.port = e.target.value; draw(); } }, ...ports.map(c => h("option", { value: c, selected: c === calc.port }, c)))),
+      ctrl("Порт назначения", h("select", { class: "sel", disabled: true }, h("option", {}, "Владивосток"))),
+      ctrl("Контейнер", seg(FREIGHT_TYPES, calc.ftype, i => { calc.ftype = i; draw(); }))));
   const list = FREIGHT_DEMO.filter(r => r.port === calc.port && r.type === calc.ftype).sort((a, b) => a.price - b.price);
-  if (!list.length) d.append(h("div", { style: "color:var(--muted)" }, "Нет данных"));
-  list.forEach((r, i) => d.append(card(i, "$ " + String(r.price).replace(/\B(?=(\d{3})+(?!\d))/g, " "), r.carrier, r.port + " → Владивосток", "Действует: с " + r.from + " по " + r.to)));
+  const col = h("div", { style: "margin-top:8px" });
+  if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
+  list.forEach((r, i) => col.append(card(i, "$ " + String(r.price).replace(/\B(?=(\d{3})+(?!\d))/g, "\u00a0"), r.carrier, r.port + " → Владивосток", per(r))));
+  d.append(col);
   return d;
 }
 
@@ -748,6 +853,10 @@ function buildDepts(m) {
     w.append(h("div", { class: "hd" }, h("b", { style: "font-size:20px" }, "Отделы"), h("div", { style: "opacity:.75;font-size:13px" }, "Нажмите на сотрудника, чтобы открыть карточку")));
     w.append(h("div", { class: "seg" }, ...[["", "Все офисы"], ["ВЛК", "Владивосток"], ["МСК", "Москва"]].map(([k, t]) =>
       h("button", { class: deptOffice === k ? "on" : "", onclick: () => { deptOffice = k; window.renderDepts(); } }, t))));
+    const pend = Object.values(USERS).filter(u => u.approved === false);
+    if (isAdmin && pend.length) w.append(h("div", { class: "dept" }, h("div", { class: "dh" }, "🆕 Заявки на вход", h("span", {}, pend.length)),
+      ...pend.map(u => h("div", { class: "row" }, avatar(u.name, u.photo, 36), h("div", { class: "m" }, h("div", { class: "n" }, u.name), h("div", { class: "s" }, u.email || "")),
+        h("button", { class: "btn sm2", onclick: () => db.collection("users").doc(u.uid).update({ approved: true }).then(() => toast("Подтверждён")) }, "Подтвердить")))));
     const all = staff();
     [...DEPTS.map(d => d[0]), ""].forEach(key => {
       const list = all.filter(u => (key ? u.dept === key : !DEPTS.some(d => d[0] === u.dept)) && (!deptOffice || u.office === deptOffice))
@@ -764,6 +873,124 @@ function buildDepts(m) {
   const f = window.renderDepts; window.renderDepts = () => { if (tab === "depts") f(); };
 }
 const _rcl = renderChatList;
+
+/* ---------- юридический отдел ---------- */
+let CON = [], conFilter = 0, conUnsub = null;
+const MAXF = 5;
+const stText = s => ({ approved: "🟢 Согласовано", revision: "🟠 На доработку", rejected: "🔴 Отклонён" }[s] || "🟡 На согласовании");
+const isLawyer = () => (USERS[me.uid] || {}).dept === "legal" || isAdmin;
+async function pickFiles(input, arr) {
+  for (const f of [...input.files]) {
+    if (arr.length >= MAXF) { toast("Не больше " + MAXF + " файлов"); break; }
+    if (f.size > 600000) { toast("«" + f.name + "» больше 600 КБ"); continue; }
+    arr.push({ name: f.name, b64: await readFileB64(f) });
+  }
+  input.value = "";
+}
+function filesPicker(arr) {
+  const box = h("div", {}), list = h("div", {});
+  const inp = h("input", { type: "file", multiple: true, class: "hidden", onchange: async () => { await pickFiles(inp, arr); draw(); } });
+  const draw = () => { list.innerHTML = ""; arr.forEach((f, i) => list.append(h("div", { class: "row", style: "padding:3px 0;border:0" }, h("div", { class: "m n" }, "📎 " + f.name),
+    h("button", { class: "ibtn", style: "width:28px;height:28px;font-size:14px", onclick: () => { arr.splice(i, 1); draw(); } }, "✕")))); };
+  box.append(h("button", { class: "btn ghost sm2", onclick: () => inp.click() }, "📎 Прикрепить файлы (до " + MAXF + ", каждый до 600 КБ)"), inp, list);
+  return box;
+}
+function newFileDocs(b, ref, files, by, authorUid, round) {
+  return files.map(f => {
+    const fr = ref.collection("files").doc();
+    b.set(fr, { name: f.name, b64: f.b64, by, uid: me.uid, authorUid, time: Date.now() });
+    return { id: fr.id, name: f.name, by, round };
+  });
+}
+function buildLegal(m) {
+  const page = h("div", { class: "page" }), w = h("div", { class: "wrap", style: "max-width:900px" }); page.append(w); m.append(page);
+  if (conUnsub) conUnsub();
+  const lawyer = isLawyer();
+  const col = db.collection("contracts");
+  const q = lawyer ? col : col.where("authorUid", "==", me.uid);
+  const draw = () => {
+    w.innerHTML = "";
+    w.append(h("div", { class: "tb" }, h("b", {}, "⚖️ Юридический отдел · договоры на согласование"),
+      h("button", { class: "btn sm2", style: "background:#fff;color:var(--navy)", onclick: newContract }, "＋ Договор")));
+    w.append(h("div", { class: "seg", style: "max-width:420px;margin-bottom:6px" }, ...["Все", "На согласовании", "Решённые"].map((n, i) =>
+      h("button", { class: conFilter === i ? "on" : "", onclick: () => { conFilter = i; draw(); } }, n))));
+    const list = CON.filter(c => conFilter === 0 || (conFilter === 1 && c.status === "new") || (conFilter === 2 && c.status !== "new"))
+      .sort((a, b) => (a.status !== "new") - (b.status !== "new") || b.time - a.time);
+    if (!list.length) w.append(h("div", { class: "empty", style: "margin-top:30px" }, "Договоров пока нет"));
+    list.forEach(c => w.append(conCard(c, lawyer)));
+  };
+  conUnsub = q.onSnapshot(s => { CON = s.docs.map(d => ({ id: d.id, ...d.data() })); if (tab === "legal") draw(); }, () => { w.innerHTML = ""; w.append(h("div", { class: "err" }, "Нет доступа к списку")); });
+  unsubs.push(() => conUnsub && conUnsub());
+  draw();
+}
+function conCard(c, lawyer) {
+  const d = new Date(c.time || 0);
+  const el = h("div", { class: "cn " + (c.status || "new") },
+    h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" }, h("span", { class: "tt" }, c.title), h("b", {}, stText(c.status))),
+    h("div", { class: "sm" }, c.authorName + " · " + pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " + fmtTime(c.time || 0) + (c.round > 1 ? " · круг " + c.round : "")));
+  if (c.note) el.append(h("div", {}, c.note));
+  if (c.link) el.append(h("div", {}, "🔗 ", h("a", { href: c.link, target: "_blank", rel: "noopener" }, "ссылка на Google Диск")));
+  const meta = c.fileMeta || [];
+  if (meta.length) el.append(h("div", { class: "fl" }, ...meta.map(f => h("a", { title: f.by === "lawyer" ? "файл юриста" : "файл автора", onclick: async () => {
+    try { const d = await db.collection("contracts").doc(c.id).collection("files").doc(f.id).get(); d.exists ? download(f.name, d.data().b64) : toast("Файл не найден"); }
+    catch (e) { toast("Не удалось открыть файл"); } } }, (f.by === "lawyer" ? "⚖️ " : "📎 ") + f.name))));
+  if (c.lawyerComment) el.append(h("div", { class: "cm" }, h("b", {}, "Юрист" + (c.decidedBy ? " (" + c.decidedBy + ")" : "") + ": "), c.lawyerComment));
+  const acts = h("div", { class: "acts" });
+  if (lawyer && c.status === "new") {
+    acts.append(h("button", { class: "btn sm2 green", onclick: () => decide(c, "approved") }, "Согласовать"),
+      h("button", { class: "btn sm2 orange", onclick: () => decide(c, "revision") }, "На доработку"),
+      h("button", { class: "btn sm2 red", onclick: () => decide(c, "rejected") }, "Отклонить"));
+  }
+  if (c.authorUid === me.uid && c.status === "revision") acts.append(h("button", { class: "btn sm2", onclick: () => resubmit(c) }, "Отправить исправленный"));
+  if ((c.authorUid === me.uid && c.status === "new") || isAdmin) acts.append(h("button", { class: "btn sm2 gray", onclick: () => delContract(c) }, "🗑 Удалить"));
+  if (acts.children.length) el.append(acts);
+  return el;
+}
+function newContract() {
+  let close; const files = [];
+  const title = h("input", { class: "field", placeholder: "Название (контрагент, предмет)" });
+  const note = h("textarea", { class: "field", rows: 3, placeholder: "Комментарий юристу" });
+  const link = h("input", { class: "field", placeholder: "или ссылка на Google Диск" });
+  close = modal(h("div", {}, h("h3", {}, "Договор на согласование"), title, note,
+    h("div", { class: "lbl" }, "Договор, карточка предприятия, допсоглашение — одним обращением:"), filesPicker(files), link,
+    h("button", { class: "btn full", onclick: async () => {
+      if (!title.value.trim() || (!files.length && !link.value.trim())) return toast("Укажите название и файлы или ссылку");
+      const ref = db.collection("contracts").doc(), b = db.batch();
+      const fm = newFileDocs(b, ref, files, "author", me.uid, 1);
+      b.set(ref, { title: title.value.trim(), note: note.value.trim(), authorUid: me.uid, authorName: myName, time: Date.now(), status: "new", round: 1, link: link.value.trim(), fileMeta: fm });
+      try { await b.commit(); close(); toast("Отправлено юристам"); } catch (e) { toast("Не удалось отправить"); }
+    } }, "Отправить"), h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
+}
+function decide(c, st) {
+  let close; const files = [];
+  const cm = h("textarea", { class: "field", rows: 3, placeholder: st === "approved" ? "Комментарий (необязательно)" : "Комментарий для автора" });
+  close = modal(h("div", {}, h("h3", {}, stText(st)), cm,
+    h("div", { class: "lbl" }, "Файлы ответа (замечания, протокол разногласий) попадут в ту же карточку:"), filesPicker(files),
+    h("button", { class: "btn full", onclick: async () => {
+      if (st !== "approved" && !cm.value.trim() && !files.length) return toast("Напишите комментарий или приложите файл");
+      const ref = db.collection("contracts").doc(c.id), b = db.batch();
+      const added = newFileDocs(b, ref, files, "lawyer", c.authorUid, c.round || 1);
+      b.update(ref, { status: st, lawyerComment: cm.value.trim(), decidedBy: myName, decidedTime: Date.now(), fileMeta: [...(c.fileMeta || []), ...added] });
+      try { await b.commit(); close(); } catch (e) { toast("Не удалось сохранить"); }
+    } }, "Готово"), h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
+}
+function resubmit(c) {
+  let close; const files = [];
+  const note = h("textarea", { class: "field", rows: 3, placeholder: "Комментарий юристу" });
+  close = modal(h("div", {}, h("h3", {}, "Исправленный договор"), note, filesPicker(files),
+    h("button", { class: "btn full", onclick: async () => {
+      const ref = db.collection("contracts").doc(c.id), b = db.batch(), round = (c.round || 1) + 1;
+      const added = newFileDocs(b, ref, files, "author", c.authorUid, round);
+      b.update(ref, { status: "new", round, note: note.value.trim(), fileMeta: [...(c.fileMeta || []), ...added] });
+      try { await b.commit(); close(); toast("Отправлено юристам"); } catch (e) { toast("Не удалось отправить"); }
+    } }, "Отправить"), h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
+}
+async function delContract(c) {
+  if (!confirm("Удалить договор «" + c.title + "»?")) return;
+  const ref = db.collection("contracts").doc(c.id), b = db.batch();
+  (c.fileMeta || []).forEach(f => b.delete(ref.collection("files").doc(f.id))); b.delete(ref);
+  try { await b.commit(); } catch (e) { toast("Не удалось удалить"); }
+}
 
 /* ---------- помощник ---------- */
 let BOT = [{ me: false, text: "Здравствуйте! Напишите, какой документ нужен: например «доверенность Люкс Фуд» или «кфк ВМТП». Могу показать срок действия доверенности и отправить файл." }];
