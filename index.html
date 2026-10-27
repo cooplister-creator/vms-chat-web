@@ -74,7 +74,7 @@ main{flex:1;min-height:0;display:flex}
 .day{align-self:center;background:#00000014;border-radius:12px;padding:3px 12px;font-size:12px;color:var(--muted);margin:8px 0}
 .mrow{display:flex;gap:6px;align-items:flex-end}
 .mrow.me{justify-content:flex-end}
-.bub{max-width:min(560px,78%);padding:7px 11px;border-radius:16px 16px 16px 4px;background:var(--card);cursor:pointer;word-break:break-word;white-space:pre-wrap}
+.bub{max-width:min(560px,78%);padding:7px 11px;border-radius:16px 16px 16px 4px;background:var(--card);cursor:default;word-break:break-word;white-space:pre-wrap}
 .me .bub{background:var(--me);border-radius:16px 16px 4px 16px}
 .bub .nm{font-size:12px;font-weight:700;cursor:pointer}
 .bub .fw{font-size:12px;font-style:italic;color:var(--muted)}
@@ -100,6 +100,7 @@ main{flex:1;min-height:0;display:flex}
 .ov{position:fixed;inset:0;background:#0007;display:flex;align-items:center;justify-content:center;z-index:50;padding:12px}
 .modal{background:var(--card);border-radius:18px;padding:20px;min-width:min(320px,92vw);max-width:min(440px,94vw);max-height:90vh;overflow:auto}
 .modal h3{margin:0 0 10px}
+.ctx{position:fixed;z-index:60;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px #0004;padding:6px;min-width:220px}
 .menu .mi{display:block;width:100%;text-align:left;background:none;border:0;padding:11px 8px;border-radius:8px;color:var(--text)}
 .menu .mi:hover{background:var(--bg)}
 .mi.red{color:#d32f2f}
@@ -298,7 +299,7 @@ function startApp() {
   buildShell();
   unsubs.push(db.collection("users").onSnapshot(s => {
     USERS = {}; s.forEach(d => USERS[d.id] = { uid: d.id, ...d.data() });
-    renderChatList(); if (tab === "depts" && window.renderDepts) window.renderDepts(); refreshHead();
+    renderChatList(); if (tab !== "chats") renderTab(); refreshHead();
   }));
   unsubs.push(db.collection("rooms").where("members", "array-contains", me.uid).onSnapshot(s => {
     ROOMS = s.docs.map(d => { const x = d.data(); return { id: d.id, type: x.type || "group", name: x.name || "", members: x.members || [],
@@ -316,6 +317,7 @@ function startApp() {
   beat(); const iv = setInterval(beat, 40000);
   const vis = () => { if (document.hidden) db.collection("users").doc(me.uid).set({ lastSeen: 0 }, { merge: true }); else beat(); };
   document.addEventListener("visibilitychange", vis);
+  window.addEventListener("pagehide", () => { navigator.sendBeacon && 0; });
   unsubs.push(() => { clearInterval(iv); document.removeEventListener("visibilitychange", vis); });
   loadRates();
 }
@@ -512,7 +514,7 @@ function renderMsgs(r) {
     if (day !== lastDay) { box.append(h("div", { class: "day" }, fmtDay(m.time))); lastDay = day; lastUid = ""; }
     const mine = m.uid === me.uid, first = lastUid !== m.uid; lastUid = m.uid;
     const u = USERS[m.uid];
-    const bub = h("div", { class: "bub", onclick: () => msgMenu(m, r) });
+    const bub = h("div", { class: "bub", oncontextmenu: e => { e.preventDefault(); msgMenu(m, r, e); } });
     if (!mine && first && r.type !== "direct") bub.append(h("div", { class: "nm", style: "color:" + hashColor(m.name), onclick: e => { e.stopPropagation(); contactCard(u); } }, m.name));
     if (m.fwd) bub.append(h("div", { class: "fw" }, "↪ Переслано от " + m.fwd));
     if (m.replyName) bub.append(h("div", { class: "rp" }, h("b", {}, m.replyName), m.replyText || ""));
@@ -535,18 +537,24 @@ function lightbox(b64) {
   document.body.append(ov);
 }
 function preview(m) { return m.text || (m.image ? "📷 Фото" : m.file ? "📎 " + m.fileName : ""); }
-function msgMenu(m, r) {
-  let close;
+function msgMenu(m, r, ev) {
+  document.querySelectorAll(".ctx").forEach(e => e.remove());
   const mine = m.uid === me.uid;
-  const item = (t, f, cls) => h("button", { class: "mi " + (cls || ""), onclick: () => { close(); f(); } }, t);
-  const body = h("div", { class: "menu" },
-    item("↩  Ответить", () => { replyTo = m; editing = null; paintBar(); $("#inp") && $("#inp").focus(); }),
-    m.text ? item("⧉  Копировать", () => { navigator.clipboard.writeText(m.text); toast("Скопировано"); }) : null,
-    item("➦  Переслать", () => forwardDialog(m)),
-    mine && m.text && !m.image && !m.file ? item("✎  Изменить", () => { editing = m; replyTo = null; $("#inp").value = m.text; paintBar(); $("#inp").focus(); }) : null,
-    mine ? item("✓✓  Просмотры: " + (m.readBy || []).filter(x => x !== me.uid).length, () => viewers(m)) : null,
-    mine || isAdmin ? item("🗑  Удалить", () => { if (confirm("Удалить сообщение у всех участников?")) msgCol(r).doc(m.id).delete(); }, "red") : null);
-  close = modal(body);
+  const box = h("div", { class: "ctx menu" });
+  const close = () => { box.remove(); document.removeEventListener("mousedown", away, true); document.removeEventListener("keydown", esc, true); window.removeEventListener("blur", close); };
+  const away = e => { if (!box.contains(e.target)) close(); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const item = (t, f, cls) => box.append(h("button", { class: "mi " + (cls || ""), onclick: () => { close(); f(); } }, t));
+  item("↩  Ответить", () => { replyTo = m; editing = null; paintBar(); $("#inp") && $("#inp").focus(); });
+  if (m.text) item("⧉  Копировать", () => { navigator.clipboard.writeText(m.text); toast("Скопировано"); });
+  item("➦  Переслать", () => forwardDialog(m));
+  if (mine && m.text && !m.image && !m.file) item("✎  Изменить", () => { editing = m; replyTo = null; $("#inp").value = m.text; paintBar(); $("#inp").focus(); });
+  if (mine) item("✓✓  Просмотры: " + (m.readBy || []).filter(x => x !== me.uid).length, () => viewers(m));
+  if (mine || isAdmin) item("🗑  Удалить", () => { if (confirm("Удалить сообщение у всех участников?")) msgCol(r).doc(m.id).delete(); }, "red");
+  document.body.append(box);
+  const x = Math.min(ev.clientX, innerWidth - box.offsetWidth - 8), y = Math.min(ev.clientY, innerHeight - box.offsetHeight - 8);
+  box.style.left = Math.max(8, x) + "px"; box.style.top = Math.max(8, y) + "px";
+  setTimeout(() => { document.addEventListener("mousedown", away, true); document.addEventListener("keydown", esc, true); window.addEventListener("blur", close); }, 0);
 }
 function viewers(m) {
   const list = (m.readBy || []).filter(x => x !== me.uid).map(x => USERS[x]).filter(Boolean);
@@ -753,7 +761,9 @@ function buildDepts(m) {
     });
   };
   window.renderDepts();
+  const f = window.renderDepts; window.renderDepts = () => { if (tab === "depts") f(); };
 }
+const _rcl = renderChatList;
 
 /* ---------- помощник ---------- */
 let BOT = [{ me: false, text: "Здравствуйте! Напишите, какой документ нужен: например «доверенность Люкс Фуд» или «кфк ВМТП». Могу показать срок действия доверенности и отправить файл." }];
