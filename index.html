@@ -538,7 +538,7 @@ function renderChatList() {
     .forEach(r => {
       const o = other(r), t = roomTitle(r);
       const prev = r.lastText ? (r.lastUid === me.uid ? "Вы: " : (r.type !== "direct" && r.lastName ? r.lastName + ": " : "")) + r.lastText : "Нет сообщений";
-      list.append(h("div", { class: "row" + (curRoom && curRoom.id === r.id ? " on" : ""), onclick: () => selectRoom(r) },
+      list.append(h("div", { class: "row" + (curRoom && curRoom.id === r.id ? " on" : ""), onclick: () => selectRoom(r), oncontextmenu: e => { if (isAdmin && r.id !== "general") { e.preventDefault(); roomCtx(r, e); } } },
         avatar(t, o ? o.photo : r.photo, 46, o ? online(o) : null),
         h("div", { class: "m" }, h("div", { class: "n" }, t), h("div", { class: "s" }, prev)),
         h("div", { class: "r" }, r.lastTime ? fmtTime(r.lastTime) : "", h("br"), r.unread > 0 ? h("span", { class: "badge" }, r.unread) : "")));
@@ -622,6 +622,21 @@ function renderMsgs(r) {
   });
   if (near) box.scrollTop = box.scrollHeight;
   if (!box._init) { box.scrollTop = box.scrollHeight; box._init = true; }
+}
+function roomCtx(r, ev) {
+  document.querySelectorAll(".ctx").forEach(e => e.remove());
+  const box = h("div", { class: "ctx menu" });
+  const close = () => { box.remove(); document.removeEventListener("mousedown", away, true); document.removeEventListener("keydown", esc, true); window.removeEventListener("blur", close); };
+  const away = e => { if (!box.contains(e.target)) close(); };
+  const esc = e => { if (e.key === "Escape") close(); };
+  const item = (t, f, cls) => box.append(h("button", { class: "mi " + (cls || ""), onclick: () => { close(); f(); } }, t));
+  if (r.type !== "direct") item("✎  Переименовать", () => { const n = prompt("Новое название", r.name); if (n && n.trim()) db.collection("rooms").doc(r.id).update({ name: n.trim() }); });
+  item("🧹  Очистить переписку", () => { if (confirm("Удалить все сообщения чата?")) clearRoom(r, false); }, "red");
+  item("🗑  Удалить чат", () => { if (confirm("Удалить чат целиком?")) clearRoom(r, true); }, "red");
+  document.body.append(box);
+  const x = Math.min(ev.clientX, innerWidth - box.offsetWidth - 8), y = Math.min(ev.clientY, innerHeight - box.offsetHeight - 8);
+  box.style.left = Math.max(8, x) + "px"; box.style.top = Math.max(8, y) + "px";
+  setTimeout(() => { document.addEventListener("mousedown", away, true); document.addEventListener("keydown", esc, true); window.addEventListener("blur", close); }, 0);
 }
 function roomManage(r) {
   let close;
