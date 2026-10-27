@@ -177,6 +177,15 @@ h2.v{margin:6px 0 2px;font-size:14px;color:var(--ocean)}
 .note{font-size:11px;color:var(--muted);margin-top:8px}
 .dept>.dh{padding:8px 14px}
 .row{padding:8px 12px}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px;align-items:start}
+.dept{margin:0;border-radius:12px}
+.dept>.dh{padding:7px 12px;font-size:14px;border-bottom:1px solid var(--line)}
+.cnt{background:var(--bg);border-radius:10px;padding:0 8px;font-size:12px;color:var(--muted);align-self:center}
+.prow{display:flex;gap:8px;align-items:center;padding:4px 12px;cursor:pointer}
+.prow:hover{background:var(--bg)}
+.pm{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.2}
+.pn{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* юристы */
 .cn{background:var(--card);border-radius:12px;padding:10px 14px;margin:8px 0;border-left:4px solid #f5b400}
 .cn.approved{border-left-color:#2e7d32}.cn.revision{border-left-color:#ef6c00}.cn.rejected{border-left-color:#c62828}
@@ -850,29 +859,29 @@ function buildDepts(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   window.renderDepts = () => {
     w.innerHTML = "";
-    w.append(h("div", { class: "hd" }, h("b", { style: "font-size:20px" }, "Отделы"), h("div", { style: "opacity:.75;font-size:13px" }, "Нажмите на сотрудника, чтобы открыть карточку")));
-    w.append(h("div", { class: "seg" }, ...[["", "Все офисы"], ["ВЛК", "Владивосток"], ["МСК", "Москва"]].map(([k, t]) =>
-      h("button", { class: deptOffice === k ? "on" : "", onclick: () => { deptOffice = k; window.renderDepts(); } }, t))));
+    w.append(h("div", { class: "tb" }, h("b", {}, "🏢 Отделы"),
+      ...[["", "Все офисы"], ["ВЛК", "Владивосток"], ["МСК", "Москва"]].map(([k, tx]) =>
+        h("label", { style: "cursor:pointer;" + (deptOffice === k ? "background:#fff;color:var(--navy);font-weight:600" : ""), onclick: () => { deptOffice = k; window.renderDepts(); } }, tx))));
     const pend = Object.values(USERS).filter(u => u.approved === false);
-    if (isAdmin && pend.length) w.append(h("div", { class: "dept" }, h("div", { class: "dh" }, "🆕 Заявки на вход", h("span", {}, pend.length)),
-      ...pend.map(u => h("div", { class: "row" }, avatar(u.name, u.photo, 36), h("div", { class: "m" }, h("div", { class: "n" }, u.name), h("div", { class: "s" }, u.email || "")),
+    if (isAdmin && pend.length) w.append(h("div", { class: "dept", style: "margin-bottom:10px" }, h("div", { class: "dh" }, "🆕 Заявки на вход", h("span", {}, pend.length)),
+      ...pend.map(u => h("div", { class: "prow" }, avatar(u.name, u.photo, 28), h("div", { class: "pm" }, h("span", { class: "pn" }, u.name), h("span", { class: "ps" }, u.email || "")),
         h("button", { class: "btn sm2", onclick: () => db.collection("users").doc(u.uid).update({ approved: true }).then(() => toast("Подтверждён")) }, "Подтвердить")))));
-    const all = staff();
+    const all = staff(), grid = h("div", { class: "dgrid" });
     [...DEPTS.map(d => d[0]), ""].forEach(key => {
       const list = all.filter(u => (key ? u.dept === key : !DEPTS.some(d => d[0] === u.dept)) && (!deptOffice || u.office === deptOffice))
         .sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru"));
       if (!list.length && !key) return;
       const d = DEPTS.find(x => x[0] === key);
-      const body = h("div", {}, ...list.map(u => h("div", { class: "row", onclick: () => contactCard(u) }, avatar(u.name, u.photo, 40, online(u)),
-        h("div", { class: "m" }, h("div", { class: "n" }, u.name), h("div", { class: "s" }, [u.position, officeLabel(u.office)].filter(Boolean).join(" · ") || (online(u) ? "в сети" : "не в сети"))))));
-      if (!list.length) body.append(h("div", { style: "padding:10px 16px;color:var(--muted)" }, "Пока никого"));
-      w.append(h("div", { class: "dept" }, h("div", { class: "dh" }, (d ? d[2] + " " + d[1] : "Без отдела"), h("span", { style: "color:var(--muted)" }, list.length)), body));
+      const box = h("div", { class: "dept" }, h("div", { class: "dh" }, (d ? d[2] + " " + d[1] : "Без отдела"), h("span", { class: "cnt" }, list.length)));
+      list.forEach(u => box.append(h("div", { class: "prow", onclick: () => contactCard(u) }, avatar(u.name, u.photo, 28, online(u)),
+        h("div", { class: "pm" }, h("span", { class: "pn" }, u.name), h("span", { class: "ps" }, [u.position, officeLabel(u.office)].filter(Boolean).join(" · "))))));
+      if (!list.length) box.append(h("div", { class: "ps", style: "padding:2px 12px 8px" }, "Пока никого"));
+      grid.append(box);
     });
+    w.append(grid);
   };
   window.renderDepts();
-  const f = window.renderDepts; window.renderDepts = () => { if (tab === "depts") f(); };
 }
-const _rcl = renderChatList;
 
 /* ---------- юридический отдел ---------- */
 let CON = [], conFilter = 0, conUnsub = null;
