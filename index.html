@@ -1087,7 +1087,11 @@ function buildBot(m) {
     try {
       if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs;
         if (j.regError) BOT.push({ me: false, text: "Сроки доверенностей не прочитались из реестра: " + j.regError }); }
-      if (!specific(q).length) BOT.push({ me: false, text: "Уточните, какой именно документ нужен: название компании (например «доверенность Люкс Фуд»), порт («кфк ВМТП») или тип образца." });
+      if (/заканчив|истека|истек|просроч|скоро/.test(norm(q))) {
+        const lim = new Date(new Date().toDateString()).getTime() + 30 * 864e5;
+        const ex = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u.getTime() <= lim; }).sort((a, b) => parseUntil(a.until) - parseUntil(b.until));
+        BOT.push(ex.length ? { me: false, text: "Просрочены или истекают в течение 30 дней: " + ex.length, docs: ex } : { me: false, text: "✅ В ближайшие 30 дней ничего не истекает. (Доверенности без указанного срока не учитываются.)" });
+      } else if (!specific(q).length) BOT.push({ me: false, text: "Уточните, какой именно документ нужен: название компании (например «доверенность Люкс Фуд»), порт («кфк ВМТП») или тип образца." });
       else { const alt = /пасифик|pacific|лоджистик|соллерс|вмпп/.test(q.toLowerCase()), q2 = alt ? q.toLowerCase().replace(/пасифик|pacific|лоджистик|соллерс|вмпп/g, " ") + " вмкт вмрп" : q;
         const res = searchDocs(DOCS, q2);
         if (res.length && q.toLowerCase().includes("кфк")) {
