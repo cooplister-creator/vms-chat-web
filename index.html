@@ -470,7 +470,32 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "28.10.2026 · сборка 2";
+const WEB_VERSION = "28.10.2026 · сборка 3";
+(function updateWatch() {
+  let shown = false;
+  async function check() {
+    if (shown) return;
+    try {
+      const url = location.href.split("#")[0].split("?")[0] + "?v=" + Date.now();
+      const r = await fetch(url, { cache: "no-store" });
+      if (!r.ok) return;
+      const m = /const WEB_VERSION = "([^"]+)"/.exec(await r.text());
+      if (m && m[1] !== WEB_VERSION) {
+        shown = true;
+        const b = document.createElement("div");
+        b.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:99999;background:#0d2b5b;color:#fff;border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 18px rgba(0,0,0,.35);font:14px system-ui,sans-serif";
+        const s = document.createElement("span"); s.style.flex = "1"; s.textContent = "Вышла новая версия сайта.";
+        const bt = document.createElement("button"); bt.textContent = "Обновить";
+        bt.style.cssText = "background:#2fb6c8;color:#fff;border:0;border-radius:10px;padding:8px 16px;font-weight:700;cursor:pointer";
+        bt.onclick = () => location.reload();
+        b.append(s, bt); document.body.append(b);
+      }
+    } catch (e) {}
+  }
+  setTimeout(check, 20000);
+  setInterval(check, 5 * 60 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+})();
 function myProfile() {
   const u = USERS[me.uid] || { uid: me.uid, name: myName, email: me.email };
   let close;
