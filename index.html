@@ -1099,11 +1099,26 @@ function buildBot(m) {
       (b.docs || []).forEach(d => { const st = statusLine(d);
         log.append(h("div", { class: "doc" }, h("b", {}, d.org || d.name), d.org ? h("div", { class: "sm", style: "font-size:12px;color:var(--muted)" }, d.name) : null,
           h("div", { class: "st", style: "color:" + st[1] }, st[0]),
-          h("button", { class: "btn", onclick: () => get(d, false) }, "Открыть"), " ", h("button", { class: "btn ghost", onclick: () => get(d, true) }, "Скачать"))); });
+          h("button", { class: "btn", onclick: () => get(d, false) }, "Открыть"), " ", h("button", { class: "btn ghost", onclick: () => get(d, true) }, "Скачать"),
+          b.del ? h("button", { class: "btn ghost", style: "margin-left:6px;color:#c62828", onclick: () => delDoc(d) }, "🗑 Удалить") : null)); });
     });
     if (busy) log.append(h("div", { style: "color:var(--muted)" }, "Ищу…"));
     log.scrollTop = log.scrollHeight;
   };
+  async function delDoc(d) {
+    if (busy || !confirm("Удалить доверенность?\n" + (d.org ? d.org + "\n" : "") + d.name + "\n\nФайл уйдёт в корзину Диска, строка исчезнет из реестра.")) return;
+    busy = true; draw();
+    try {
+      const tk = await me.getIdToken();
+      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "delete", token: tk, id: d.id }) });
+      const txt = await resp.text(); let j;
+      try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате (нужна новая версия развёртывания)"); }
+      if (j.error) throw new Error(j.error);
+      DOCS = null;
+      BOT.push({ me: false, text: "🗑 Удалено: " + (d.org || d.name) + ". Файл в корзине Диска (восстановить можно в течение 30 дней)." });
+    } catch (e) { BOT.push({ me: false, text: "Не получилось удалить: " + (e.message || "ошибка") }); }
+    busy = false; draw();
+  }
   async function uploadFile(f) {
     if (busy) return;
     if (f.size > 8 * 1024 * 1024) { BOT.push({ me: false, text: "Файл больше 8 МБ" }); draw(); return; }
@@ -1138,6 +1153,16 @@ function buildBot(m) {
     { const n = q.toLowerCase().replace(/ё/g, "е");
       if ((n.includes("кфк") || n.includes("скк")) && !["вмтп", "вмкт", "вмрп", "пасифик", "pacific", "вмпп", "соллерс", "находк"].some(k => n.includes(k))) {
         BOT.push({ me: false, text: "Уточните порт:", choices: ["ВМТП", "ВМКТ (ВМРП)", "Пасифик Лоджистик (Соллерс)", "ВМПП", "Находка"], kind: n.includes("скк") ? "скк" : "кфк" }); draw(); return; } }
+    if (/(удал|убер|убра|стер)[а-яё]*\s+(из\s+реестра\s+)?(нов[а-яё]*\s+)?(довер|довк)/.test(norm(q))) {
+      busy = true; draw();
+      try {
+        if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs; }
+        const q3 = norm(q).replace(/удал\S*|убер\S*|убра\S*|стер\S*|из реестра|реестр\S*/g, " ");
+        const found = specific(q3).length ? searchDocs(DOCS.filter(d => d.kind === "poa"), q3) : [];
+        BOT.push(!specific(q3).length ? { me: false, text: "Какую доверенность удалить? Напишите, например: «удали доверенность Люкс Фуд»." } : !found.length ? { me: false, text: "Такую доверенность не нашёл. Уточните название компании." } : { me: false, text: "Нашёл: " + found.length + ". Нажмите «🗑 Удалить» у нужной — перед удалением спрошу подтверждение.", docs: found, del: true });
+      } catch (e) { DOCS = null; BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      busy = false; draw(); return;
+    }
     if (/(подгруз|загруз|добав|залей|залить)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q))) { BOT.push({ me: false, text: "Прикрепите файл доверенности (PDF или фото) — добавлю её в реестр и прочитаю срок.", upload: true }); draw(); return; }
     busy = true; draw();
     try {
