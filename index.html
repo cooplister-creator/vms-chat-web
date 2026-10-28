@@ -470,6 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
+const WEB_VERSION = "28.10.2026 · сборка 2";
 function myProfile() {
   const u = USERS[me.uid] || { uid: me.uid, name: myName, email: me.email };
   let close;
@@ -479,7 +480,8 @@ function myProfile() {
     h("div", { class: "line" }, "📞", h("input", { id: "ph", class: "field", style: "margin:0", placeholder: "Телефон", value: u.phone || "" })),
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(me.uid).set({ phone: $("#ph").value.trim() }, { merge: true }); toast("Сохранено"); } }, "Сохранить телефон"),
     h("button", { class: "btn red full", onclick: () => { close(); auth.signOut(); } }, "Выйти"),
-    h("button", { class: "btn gray full", onclick: () => close() }, "Закрыть"));
+    h("button", { class: "btn gray full", onclick: () => close() }, "Закрыть"),
+    h("div", { style: "text-align:center;color:var(--muted);font-size:12px;margin-top:8px" }, "Веб-версия: " + WEB_VERSION));
   close = modal(body);
 }
 function plusMenu() {
