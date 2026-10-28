@@ -1087,10 +1087,17 @@ function buildBot(m) {
     try {
       if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs;
         if (j.regError) BOT.push({ me: false, text: "Сроки доверенностей не прочитались из реестра: " + j.regError }); }
-      if (/заканчив|истека|истек|просроч|скоро/.test(norm(q))) {
-        const lim = new Date(new Date().toDateString()).getTime() + 30 * 864e5;
-        const ex = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u.getTime() <= lim; }).sort((a, b) => parseUntil(a.until) - parseUntil(b.until));
-        BOT.push(ex.length ? { me: false, text: "Просрочены или истекают в течение 30 дней: " + ex.length, docs: ex } : { me: false, text: "✅ В ближайшие 30 дней ничего не истекает. (Доверенности без указанного срока не учитываются.)" });
+      if (/просроч|закончил|истекл|истекш|истек(?!а)/.test(norm(q)) && !/скоро|ближайш/.test(norm(q))) {
+        const today = new Date(new Date().toDateString());
+        const exp = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u < today; }).sort((a, b) => parseUntil(b.until) - parseUntil(a.until));
+        const shown = exp.slice(0, 40);
+        BOT.push(exp.length ? { me: false, text: "Срок уже истёк: " + exp.length + (exp.length > shown.length ? " (показаны " + shown.length + " последних по сроку)" : ""), docs: shown } : { me: false, text: "✅ Просроченных доверенностей нет." });
+      } else if (/заканчива|истека|скоро|ближайш/.test(norm(q))) {
+        const today = new Date(new Date().toDateString()), lim = today.getTime() + 30 * 864e5;
+        const soon = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u >= today && u.getTime() <= lim; }).sort((a, b) => parseUntil(a.until) - parseUntil(b.until));
+        const expN = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u < today; }).length;
+        const tail = expN ? " Уже просрочено: " + expN + " — напишите «что просрочено»." : "";
+        BOT.push(soon.length ? { me: false, text: "Заканчиваются в течение 30 дней: " + soon.length + "." + tail, docs: soon } : { me: false, text: "✅ В ближайшие 30 дней ни одна доверенность не заканчивается." + tail });
       } else if (!specific(q).length) BOT.push({ me: false, text: "Уточните, какой именно документ нужен: название компании (например «доверенность Люкс Фуд»), порт («кфк ВМТП») или тип образца." });
       else { const alt = /пасифик|pacific|лоджистик|соллерс|вмпп/.test(q.toLowerCase()), q2 = alt ? q.toLowerCase().replace(/пасифик|pacific|лоджистик|соллерс|вмпп/g, " ") + " вмкт вмрп" : q;
         const res = searchDocs(DOCS, q2);
