@@ -1084,12 +1084,16 @@ function buildBot(m) {
   const log = h("div", { style: "flex:1;overflow:auto;padding:16px" });
   const inp = h("input", { class: "field", style: "margin:0;border-radius:22px", placeholder: "Какой документ нужен?" });
   const btn = h("button", { class: "send" }, "➤");
-  page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, inp, btn)); m.append(page);
+  const fileIn = h("input", { type: "file", accept: "application/pdf,image/*", style: "display:none" });
+  const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить доверенность", onclick: () => fileIn.click() }, "📎");
+  page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, clip, inp, btn, fileIn)); m.append(page);
+  fileIn.onchange = () => { const f = fileIn.files[0]; fileIn.value = ""; if (f) uploadFile(f); };
   let busy = false;
   const draw = () => {
     log.innerHTML = "";
     BOT.forEach(b => {
       log.append(h("div", { class: "bot" + (b.me ? " me" : "") }, h("div", { class: "bb" }, b.text)));
+      if (b.upload) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => fileIn.click() }, "📎 Выбрать файл")));
       if (b.xlsx) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => downloadXlsx(b.xname, b.xlsx).catch(e => toast(e.message || "Ошибка")) }, "📊 Скачать Excel")));
       (b.choices || []).forEach(c => log.append(h("div", {}, h("button", { class: "btn ghost", style: "margin:3px 0", onclick: () => ask(b.kind + " " + c) }, c))));
       (b.docs || []).forEach(d => { const st = statusLine(d);
@@ -1100,6 +1104,23 @@ function buildBot(m) {
     if (busy) log.append(h("div", { style: "color:var(--muted)" }, "Ищу…"));
     log.scrollTop = log.scrollHeight;
   };
+  async function uploadFile(f) {
+    if (busy) return;
+    if (f.size > 8 * 1024 * 1024) { BOT.push({ me: false, text: "Файл больше 8 МБ" }); draw(); return; }
+    busy = true; BOT.push({ me: false, text: "Загружаю файл и читаю срок…" }); draw();
+    try {
+      const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => no(new Error("Не удалось прочитать файл")); r.readAsDataURL(f); });
+      const t = await me.getIdToken();
+      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "upload", token: t, name: f.name, mime: f.type, b64 }) });
+      const txt = await resp.text(); let j;
+      try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате (нужна новая версия развёртывания)"); }
+      if (j.error) throw new Error(j.error);
+      DOCS = null;
+      const u = parseUntil(j.until);
+      BOT.push({ me: false, text: u ? "✅ Добавлено: " + j.org + ". Срок до " + pad(u.getDate()) + "." + pad(u.getMonth() + 1) + "." + u.getFullYear() + (u < new Date(new Date().toDateString()) ? " — уже просрочена!" : ".") : "⚠️ Файл «" + j.name + "» добавлен, но срок не распознан — проверьте его в реестре." });
+    } catch (e) { BOT.push({ me: false, text: "Не получилось загрузить: " + (e.message || "ошибка") }); }
+    busy = false; draw();
+  }
   async function get(d, dl) {
     toast("Загружаю…");
     try {
@@ -1117,6 +1138,7 @@ function buildBot(m) {
     { const n = q.toLowerCase().replace(/ё/g, "е");
       if ((n.includes("кфк") || n.includes("скк")) && !["вмтп", "вмкт", "вмрп", "пасифик", "pacific", "вмпп", "соллерс", "находк"].some(k => n.includes(k))) {
         BOT.push({ me: false, text: "Уточните порт:", choices: ["ВМТП", "ВМКТ (ВМРП)", "Пасифик Лоджистик (Соллерс)", "ВМПП", "Находка"], kind: n.includes("скк") ? "скк" : "кфк" }); draw(); return; } }
+    if (/(подгруз|загруз|добав|залей|залить)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q))) { BOT.push({ me: false, text: "Прикрепите файл доверенности (PDF или фото) — добавлю её в реестр и прочитаю срок.", upload: true }); draw(); return; }
     busy = true; draw();
     try {
       if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs;
