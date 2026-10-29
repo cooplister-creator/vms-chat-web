@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 7";
+const WEB_VERSION = "29.10.2026 · сборка 8";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -891,13 +891,14 @@ function railBlock(draw) {
     const bar = h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;margin:10px 0" },
       h("button", { class: "btn", onclick: () => { SHOWARCH = !SHOWARCH; if (!SHOWARCH) SEL.clear(); draw(); } }, (SHOWARCH ? "Убрать архивные ставки" : "Показать архивные ставки") + " (" + nA + ")"));
     if (SHOWARCH && SEL.size) bar.append(h("button", { class: "btn", style: "background:#d32f2f;color:#fff", onclick: async () => {
-      if (!confirm("Удалить выбранные архивные ставки (" + SEL.size + " шт.) из базы? Это нельзя отменить.")) return;
+      const cn = [...new Set(activeRates().filter(r => r.arch && SEL.has(rkey(r))).map(r => r.contractor))];
+      if (!confirm("Удалить весь архив контрагента: " + cn.join(", ") + " — по всем станциям и типам контейнеров? Действующие ставки не затрагиваются. Это нельзя отменить.")) return;
       try {
         const items = activeRates().filter(r => r.arch && SEL.has(rkey(r))).map(r => ({ contractor: r.contractor, station: r.station, type: r.type, vat: r.vat, from: r.from, to: r.to, price: r.price }));
         const tk = await me.getIdToken();
         const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_delete", token: tk, items }) });
         const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
-        const gone = new Set(SEL); RATES = RATES.filter(r => !gone.has(rkey(r))); SEL.clear(); toast("Удалено: " + j.deleted); draw();
+        const gc = new Set(items.map(x => x.contractor)); RATES = RATES.filter(r => !(gc.has(r.contractor) && activeRates().some(a => a.arch && rkey(a) === rkey(r)))); SEL.clear(); toast("Удалено: " + j.deleted); draw();
       } catch (e) { toast(e.message || "Не получилось удалить"); }
     } }, "🗑 Удалить выбранные (" + SEL.size + ")"));
     d.append(bar);
