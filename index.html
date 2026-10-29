@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 4";
+const WEB_VERSION = "29.10.2026 · сборка 6";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -857,9 +857,10 @@ function buildCalc(m) {
 }
 function seg(names, cur, on) { return h("div", { class: "seg" }, ...names.map((n, i) => h("button", { class: cur === i ? "on" : "", onclick: () => on(i) }, n))); }
 function ctrl(label, el) { return h("div", {}, h("label", {}, label), el); }
-function card(i, price, l1, l2, l3) {
-  return h("div", { class: "rc" + (i === 0 ? " best" : "") }, h("div", { class: "p" }, price),
-    h("div", {}, h("div", { class: "c1" }, (i === 0 ? "★ " : "") + l1), h("div", { class: "sm" }, l2 + " · " + l3)));
+function card(i, price, l1, l2, l3, future) {
+  return h("div", { class: "rc" + (i === 0 && !future ? " best" : ""), style: future ? "opacity:.85" : "" }, h("div", { class: "p" }, price),
+    h("div", {}, h("div", { class: "c1" }, (i === 0 && !future ? "★ " : "") + l1),
+      h("div", { class: "sm" }, l2 + " · ", future ? h("span", { style: "color:#d32f2f;font-weight:600" }, l3 + " · ещё не действует") : l3)));
 }
 const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
 let ratesLoaded = false;
@@ -870,9 +871,15 @@ async function loadRates(draw) {
     if (j.rates && j.rates.length) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
   } catch (e) { console.warn("rates", e); }
 }
+function activeRates() {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const pd = x => { const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(x || ""); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
+  const a = RATES.filter(r => { const f = pd(r.from), e = pd(r.to); return !(e && e < t); }).map(r => { const f = pd(r.from); return Object.assign({}, r, { future: !!(f && f > t), fd: f ? f.getTime() : 0 }); });
+  return a;
+}
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
-  const cities = [...new Set(RATES.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
+  const AR = activeRates(); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление Владивосток"),
     h("div", { class: "ctrl" },
       ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c)))),
@@ -880,9 +887,9 @@ function railBlock(draw) {
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
-    const list = RATES.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => a.price - b.price);
+    const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => (a.future - b.future) || (a.future ? a.fd - b.fd : a.price - b.price));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-    list.forEach((r, i) => col.append(card(i, money(r.price), r.contractor, r.station, per(r))));
+    list.forEach((r, i) => col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future)));
     vg.append(col);
   });
   d.append(vg, h("div", { class: "note" }, "Без ВОХР, ПРР и надбавок. Обновлено: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента."));
