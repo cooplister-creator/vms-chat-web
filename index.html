@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "28.10.2026 · сборка 3";
+const WEB_VERSION = "29.10.2026 · сборка 4";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1121,10 +1121,18 @@ function buildBot(m) {
   const inp = h("input", { class: "field", style: "margin:0;border-radius:22px", placeholder: "Какой документ нужен?" });
   const btn = h("button", { class: "send" }, "➤");
   let pickMode = "poa";
-  const fileIn = h("input", { type: "file", accept: "application/pdf,image/*", style: "display:none" });
-  const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить доверенность", onclick: () => { pickMode = "poa"; fileIn.click(); } }, "📎");
+  const fileIn = h("input", { type: "file", accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*", multiple: true, style: "display:none" });
+  const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить файл (доверенность или ставки)", onclick: () => { pickMode = "poa"; fileIn.click(); } }, "📎");
   page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, isAdmin ? clip : null, inp, btn, fileIn)); m.append(page);
-  fileIn.onchange = () => { const f = fileIn.files[0]; fileIn.value = ""; if (f) uploadFile(f); };
+  fileIn.onchange = () => { const fs = Array.from(fileIn.files); fileIn.value = ""; uploadMany(fs); };
+  const drop = h("div", { style: "display:none;position:absolute;inset:0;z-index:20;background:rgba(30,120,255,.14);border:3px dashed #1e78ff;border-radius:16px;align-items:center;justify-content:center;font-size:20px;font-weight:600;pointer-events:none" }, "Отпустите файл здесь");
+  page.style.position = "relative"; page.append(drop);
+  let dc = 0;
+  page.addEventListener("dragenter", e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) { e.preventDefault(); dc++; drop.style.display = "flex"; } });
+  page.addEventListener("dragover", e => { if (e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files")) e.preventDefault(); });
+  page.addEventListener("dragleave", () => { dc = Math.max(0, dc - 1); if (!dc) drop.style.display = "none"; });
+  page.addEventListener("drop", e => { e.preventDefault(); dc = 0; drop.style.display = "none"; const fs = Array.from((e.dataTransfer && e.dataTransfer.files) || []); if (!fs.length) return;
+    if (!isAdmin) { BOT.push({ me: false, text: "Загружать файлы могут только администраторы." }); draw(); return; } uploadMany(fs); });
   let busy = false;
   const draw = () => {
     log.innerHTML = "";
@@ -1191,22 +1199,32 @@ function buildBot(m) {
     } catch (e) { BOT.push({ me: false, text: "Не получилось разобрать файл: " + (e.message || "ошибка") }); }
     busy = false; pickMode = "poa"; draw();
   }
+  async function uploadMany(fs) { for (const f of fs) { while (busy) await new Promise(r => setTimeout(r, 200)); await uploadFile(f); } }
   async function uploadFile(f) {
-    if (pickMode === "rates") return uploadRates(f);
     if (busy) return;
     if (f.size > 8 * 1024 * 1024) { BOT.push({ me: false, text: "Файл больше 8 МБ" }); draw(); return; }
-    busy = true; BOT.push({ me: false, text: "Загружаю файл и читаю срок…" }); draw();
+    busy = true; BOT.push({ me: false, text: "Читаю «" + f.name + "» и определяю, что это…" }); draw();
     try {
       const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => no(new Error("Не удалось прочитать файл")); r.readAsDataURL(f); });
       const t = await me.getIdToken();
-      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "upload", token: t, name: f.name, mime: f.type, b64 }) });
+      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "smart", token: t, name: f.name, mime: f.type, b64 }) });
       const txt = await resp.text(); let j;
       try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате (нужна новая версия развёртывания)"); }
       if (j.error) throw new Error(j.error);
-      DOCS = null;
-      const u = parseUntil(j.until);
-      BOT.push({ me: false, text: u ? "✅ Добавлено: " + j.org + ". Срок до " + pad(u.getDate()) + "." + pad(u.getMonth() + 1) + "." + u.getFullYear() + (u < new Date(new Date().toDateString()) ? " — уже просрочена!" : ".") : "⚠️ Файл «" + j.name + "» добавлен, но срок не распознан — проверьте его в реестре." });
-    } catch (e) { BOT.push({ me: false, text: "Не получилось загрузить: " + (e.message || "ошибка") }); }
+      if (j.kind === "rates") {
+        const st = j.stats;
+        let msg = "📈 Это файл со ставками.\nФайл: " + j.file + "\nКонтрагент: " + j.contractor + "\nПериод: " + j.from + " — " + j.to + "\nСтрок: " + st.total + " · новых: " + st.added + " · цена изменилась: " + st.changed + " · новый период: " + st.period + " · без изменений: " + st.same;
+        if (j.newStations && j.newStations.length) msg += "\n\nНовые станции: " + j.newStations.join("; ");
+        if (j.examples && j.examples.length) msg += "\n\nПримеры изменений:\n" + j.examples.map(x => "• " + x).join("\n");
+        if (j.notes && j.notes.length) msg += "\n\n" + j.notes.map(x => "ℹ️ " + x).join("\n");
+        msg += "\n\nСтарые периоды остаются до своей даты окончания. Проверьте и нажмите «Применить».";
+        BOT.push({ me: false, text: msg, apply: j.previewId });
+      } else {
+        DOCS = null;
+        const u = parseUntil(j.until);
+        BOT.push({ me: false, text: u ? "✅ Это доверенность — добавил в реестр: " + j.org + ". Срок до " + pad(u.getDate()) + "." + pad(u.getMonth() + 1) + "." + u.getFullYear() + (u < new Date(new Date().toDateString()) ? " — уже просрочена!" : ".") : "⚠️ Доверенность «" + j.name + "» добавлена, но срок не распознан — проверьте его в реестре." });
+      }
+    } catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
     busy = false; draw();
   }
   async function get(d, dl) {
@@ -1226,11 +1244,14 @@ function buildBot(m) {
     { const n = q.toLowerCase().replace(/ё/g, "е");
       if ((n.includes("кфк") || n.includes("скк")) && !["вмтп", "вмкт", "вмрп", "пасифик", "pacific", "вмпп", "соллерс", "находк"].some(k => n.includes(k))) {
         BOT.push({ me: false, text: "Уточните порт:", choices: ["ВМТП", "ВМКТ (ВМРП)", "Пасифик Лоджистик (Соллерс)", "ВМПП", "Находка"], kind: n.includes("скк") ? "скк" : "кфк" }); draw(); return; } }
-    if (/(подгруз|загруз|добав|обнов)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
-      BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
+    if (/(что|чего)\s+(ты\s+)?(умеешь|можешь|могу)|твои\s+функц|^(помощь|справка|команды|help)$|что\s+(у\s+тебя\s+)?есть|как\s+(тобой\s+)?пользоваться/.test(norm(q).trim())) {
+      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Доверенности и документы — напишите, например: «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n⏳ Сроки — «просроченные доверенности», «что истекает скоро».\n📊 Excel — «выгрузи в экселе просроченные доверенности» или «все доверенности».\n🚆 Ставки ЖД — действующие ставки считаются в калькуляторе автоматически." + (isAdmin ? "\n\nТолько для администраторов:\n➕ Перетащите файл в чат или прикрепите через 📎 (можно несколько сразу) — сам определю: доверенность добавлю в реестр, ставки разберу и покажу, что изменится, останется нажать «Применить».\n🗑 «Удали доверенность …» — уберу из реестра (файл останется в корзине Диска 30 дней).\n📈 Ставки: понимаю файлы ФРЕШ ТЕРМИНАЛ, ТРАНС СИНЕРГИЯ, ЮНИОН, АТК. Старые ставки действуют до даты окончания." : "") }); draw(); return;
+    }
+    if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
+      BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется. Можно просто перетащить файл в чат или прикрепить через 📎 — сам пойму, что это.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
       draw(); return;
     }
-    if (!isAdmin && (/(удал|убер|убра|стер)[а-яё]*\s+(из\s+реестра\s+)?(нов[а-яё]*\s+)?(довер|довк)/.test(norm(q)) || /(подгруз|загруз|добав|залей|залить)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q)))) { BOT.push({ me: false, text: "Добавлять и удалять доверенности могут только администраторы." }); draw(); return; }
+    if (!isAdmin && (/(удал|убер|убра|стер)[а-яё]*\s+(из\s+реестра\s+)?(нов[а-яё]*\s+)?(довер|довк)/.test(norm(q)) || /(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q)))) { BOT.push({ me: false, text: "Добавлять и удалять доверенности могут только администраторы." }); draw(); return; }
     if (/(удал|убер|убра|стер)[а-яё]*\s+(из\s+реестра\s+)?(нов[а-яё]*\s+)?(довер|довк)/.test(norm(q))) {
       busy = true; draw();
       try {
@@ -1241,7 +1262,7 @@ function buildBot(m) {
       } catch (e) { DOCS = null; BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
       busy = false; draw(); return;
     }
-    if (/(подгруз|загруз|добав|залей|залить)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q))) { BOT.push({ me: false, text: "Прикрепите файл доверенности (PDF или фото) — добавлю её в реестр и прочитаю срок.", upload: true }); draw(); return; }
+    if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?довер/.test(norm(q))) { BOT.push({ me: false, text: "Прикрепите файл доверенности (PDF или фото) — добавлю её в реестр и прочитаю срок.", upload: true }); draw(); return; }
     busy = true; draw();
     try {
       if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs;
