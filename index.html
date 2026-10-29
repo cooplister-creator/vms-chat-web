@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 6";
+const WEB_VERSION = "29.10.2026 · сборка 7";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -871,25 +871,49 @@ async function loadRates(draw) {
     if (j.rates && j.rates.length) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
   } catch (e) { console.warn("rates", e); }
 }
+let SHOWARCH = false; const SEL = new Set();
+const rkey = r => [r.contractor, r.station, r.type, r.vat, r.from, r.to, r.price].join("|");
 function activeRates() {
   const t = new Date(); t.setHours(0, 0, 0, 0);
   const pd = x => { const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})/.exec(x || ""); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
-  const a = RATES.filter(r => { const f = pd(r.from), e = pd(r.to); return !(e && e < t); }).map(r => { const f = pd(r.from); return Object.assign({}, r, { future: !!(f && f > t), fd: f ? f.getTime() : 0 }); });
+  const a = RATES.filter(r => { const f = pd(r.from), e = pd(r.to); return true; }).map(r => { const f = pd(r.from), e = pd(r.to); return Object.assign({}, r, { future: !!(f && f > t), fd: f ? f.getTime() : 0, arch: !!(e && e < t), td: e ? e.getTime() : 0 }); });
   return a;
 }
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
-  const AR = activeRates(); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
+  const AR = activeRates().filter(r => !r.arch || (isAdmin && SHOWARCH)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление Владивосток"),
     h("div", { class: "ctrl" },
       ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c)))),
       ctrl("Контейнер", seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }))));
+  if (isAdmin) {
+    const nA = activeRates().filter(r => r.arch).length;
+    const bar = h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;margin:10px 0" },
+      h("button", { class: "btn", onclick: () => { SHOWARCH = !SHOWARCH; if (!SHOWARCH) SEL.clear(); draw(); } }, (SHOWARCH ? "Убрать архивные ставки" : "Показать архивные ставки") + " (" + nA + ")"));
+    if (SHOWARCH && SEL.size) bar.append(h("button", { class: "btn", style: "background:#d32f2f;color:#fff", onclick: async () => {
+      if (!confirm("Удалить выбранные архивные ставки (" + SEL.size + " шт.) из базы? Это нельзя отменить.")) return;
+      try {
+        const items = activeRates().filter(r => r.arch && SEL.has(rkey(r))).map(r => ({ contractor: r.contractor, station: r.station, type: r.type, vat: r.vat, from: r.from, to: r.to, price: r.price }));
+        const tk = await me.getIdToken();
+        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_delete", token: tk, items }) });
+        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+        const gone = new Set(SEL); RATES = RATES.filter(r => !gone.has(rkey(r))); SEL.clear(); toast("Удалено: " + j.deleted); draw();
+      } catch (e) { toast(e.message || "Не получилось удалить"); }
+    } }, "🗑 Удалить выбранные (" + SEL.size + ")"));
+    d.append(bar);
+  }
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
-    const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => (a.future - b.future) || (a.future ? a.fd - b.fd : a.price - b.price));
+    const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : a.price - b.price));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-    list.forEach((r, i) => col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future)));
+    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future)); return; }
+      const k = rkey(r), cb = h("input", { type: "checkbox", style: "width:20px;height:20px;margin:0 10px 0 0;flex:none" });
+      cb.checked = SEL.has(k); cb.onchange = () => { cb.checked ? SEL.add(k) : SEL.delete(k); draw(); };
+      const el = card(1, money(r.price), r.contractor, r.station, per(r), false);
+      el.classList.remove("best"); el.style.opacity = ".7"; el.style.background = "#eceff1";
+      el.querySelector(".sm").append(" · ", h("span", { style: "color:#6d4c41;font-weight:600" }, "в архиве — нужна замена"));
+      el.style.alignItems = "center"; el.prepend(cb); col.append(el); });
     vg.append(col);
   });
   d.append(vg, h("div", { class: "note" }, "Без ВОХР, ПРР и надбавок. Обновлено: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента."));
