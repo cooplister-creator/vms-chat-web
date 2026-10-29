@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 13";
+const WEB_VERSION = "29.10.2026 · сборка 14";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -857,14 +857,18 @@ function buildCalc(m) {
 }
 function seg(names, cur, on) { return h("div", { class: "seg" }, ...names.map((n, i) => h("button", { class: cur === i ? "on" : "", onclick: () => on(i) }, n))); }
 function ctrl(label, el) { return h("div", {}, h("label", {}, label), el); }
+function blankTab() {   // вкладку нужно открывать сразу по клику, иначе браузер блокирует всплывающее окно
+  let w = null; try { w = window.open("", "_blank"); if (w) w.document.write("<p style='font:16px sans-serif;padding:20px'>Загружаю файл…</p>"); } catch (e) { w = null; } return w;
+}
+function showIn(w, url) { if (w && !w.closed) w.location.href = url; else window.location.href = url; }
 async function openRateFile(id) {
-  toast("Открываю файл…");
+  toast("Открываю файл…"); const w = blankTab();
   try {
     const j = await docsCall("action=ratefile&id=" + encodeURIComponent(id));
     const bin = atob(j.b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
     const ext = j.name.split(".").pop().toLowerCase(), mime = ext === "pdf" ? "application/pdf" : /^(jpe?g|png)$/.test(ext) ? "image/" + ext.replace("jpg", "jpeg") : "";
-    if (mime) window.open(URL.createObjectURL(new Blob([arr], { type: mime })), "_blank"); else download(j.name, j.b64);
-  } catch (e) { toast(e.message || "Не удалось открыть файл"); }
+    if (mime) showIn(w, URL.createObjectURL(new Blob([arr], { type: mime }))); else { if (w) w.close(); download(j.name, j.b64); }
+  } catch (e) { if (w) w.close(); toast(e.message || "Не удалось открыть файл"); }
 }
 function card(i, price, l1, l2, l3, future, file) {
   return h("div", { class: "rc" + (i === 0 && !future ? " best" : ""), style: future ? "opacity:.85" : "" }, h("div", { class: "p" }, price),
@@ -1312,16 +1316,16 @@ function buildBot(m) {
     busy = false; draw();
   }
   async function get(d, dl) {
-    toast("Загружаю…");
+    toast("Загружаю…"); const w = dl ? null : blankTab();
     try {
       const j = await docsCall("action=get&id=" + encodeURIComponent(d.id));
       if (dl) download(j.name, j.b64);
       else {
         const bin = atob(j.b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
         const ext = j.name.split(".").pop().toLowerCase(), mime = ext === "pdf" ? "application/pdf" : /^(jpe?g|png)$/.test(ext) ? "image/" + ext.replace("jpg", "jpeg") : "application/octet-stream";
-        if (mime === "application/octet-stream") download(j.name, j.b64); else window.open(URL.createObjectURL(new Blob([arr], { type: mime })), "_blank");
+        if (mime === "application/octet-stream") { if (w) w.close(); download(j.name, j.b64); } else showIn(w, URL.createObjectURL(new Blob([arr], { type: mime })));
       }
-    } catch (e) { toast(e.message || "Ошибка"); }
+    } catch (e) { if (w) w.close(); toast(e.message || "Ошибка"); }
   }
   async function ask(qq) {
     const q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; BOT.push({ me: true, text: q });
