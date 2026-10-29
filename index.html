@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 9";
+const WEB_VERSION = "29.10.2026 · сборка 10";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1193,7 +1193,7 @@ function buildBot(m) {
     BOT.forEach(b => {
       log.append(h("div", { class: "bot" + (b.me ? " me" : "") }, h("div", { class: "bb" }, b.text)));
       if (b.upload) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => { pickMode = b.ukind || "poa"; fileIn.click(); } }, "📎 Выбрать файл")));
-      if (b.apply) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => applyRates(b.apply) }, "✅ Применить")));
+      if (b.apply) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0" + (b.applied ? ";opacity:.55;cursor:default" : ""), disabled: !!b.applied, onclick: () => applyRates(b.apply) }, b.applied || "✅ Применить")));
       if (b.xlsx) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => downloadXlsx(b.xname, b.xlsx).catch(e => toast(e.message || "Ошибка")) }, "📊 Скачать Excel")));
       (b.choices || []).forEach(c => log.append(h("div", {}, h("button", { class: "btn ghost", style: "margin:3px 0", onclick: () => ask(b.kind + " " + c) }, c))));
       (b.docs || []).forEach(d => { const st = statusLine(d);
@@ -1221,15 +1221,17 @@ function buildBot(m) {
   }
   async function applyRates(id) {
     if (busy) return;
+    BOT.forEach(b => { if (b.apply === id) b.applied = "…"; });
     busy = true; draw();
     try {
       const tk = await me.getIdToken();
       const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_apply", token: tk, previewId: id }) });
       const j = JSON.parse(await resp.text());
       if (j.error) throw new Error(j.error);
+      BOT.forEach(b => { if (b.apply === id) b.applied = "✅ Применено"; });
       ratesLoaded = false; loadRates(() => draw());
       BOT.push({ me: false, text: "✅ Ставки обновлены (" + j.contractor + "): добавлено " + j.added + ", обновлено " + j.updated + ", закрыто старых периодов " + j.closed + ". Калькулятор уже использует новые ставки." });
-    } catch (e) { BOT.push({ me: false, text: "Не получилось применить: " + (e.message || "ошибка") }); }
+    } catch (e) { BOT.forEach(b => { if (b.apply === id) b.applied = /устарел/.test(e.message || "") ? "Предпросмотр устарел" : ""; }); BOT.push({ me: false, text: "Не получилось применить: " + (e.message || "ошибка") }); }
     busy = false; draw();
   }
   async function uploadRates(f) {
@@ -1273,6 +1275,8 @@ function buildBot(m) {
         if (j.notes && j.notes.length) msg += "\n\n" + j.notes.map(x => "ℹ️ " + x).join("\n");
         msg += "\n\nСтарые периоды остаются до своей даты окончания. Проверьте и нажмите «Применить».";
         BOT.push({ me: false, text: msg, apply: j.previewId });
+      } else if (j.kind === "other") {
+        BOT.push({ me: false, text: "📁 Не уверен, что это доверенность или ставки ЖД. Сохранил файл «" + j.name + "» на Диске: " + j.folder + ".\nЕсли это доверенность — добавьте слово «доверенность» в имя файла и загрузите снова." });
       } else {
         DOCS = null;
         const u = parseUntil(j.until);
