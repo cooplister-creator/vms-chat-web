@@ -468,9 +468,13 @@ function assignDialog(u) {
   const pos = h("input", { class: "field", placeholder: "Должность", value: u.position || "" });
   close = modal(h("div", {}, h("h3", {}, u.name), h("span", { class: "lbl" }, "Отдел"), dep, h("span", { class: "lbl" }, "Офис"), off, h("span", { class: "lbl" }, "Должность"), pos,
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
+    u.uid !== me.uid && !u.admin ? h("button", { class: "btn ghost full", style: "color:#c62828", onclick: async () => {
+      if (!confirm("Удалить «" + u.name + "» из чата?\n\nДоступ будет закрыт. Чтобы вернуться, человеку нужно заново пройти согласование администратором.")) return;
+      try { await db.collection("users").doc(u.uid).update({ approved: false }); close(); toast("Удалён из чата"); } catch (e) { toast("Не удалось удалить"); }
+    } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 14";
+const WEB_VERSION = "29.10.2026 · сборка 16";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -499,11 +503,29 @@ const WEB_VERSION = "29.10.2026 · сборка 14";
 function myProfile() {
   const u = USERS[me.uid] || { uid: me.uid, name: myName, email: me.email };
   let close;
+  const phoneBox = h("div", {});
+  const drawPhone = (editing) => {
+    phoneBox.innerHTML = "";
+    const saved = (USERS[me.uid] && USERS[me.uid].phone) || u.phone || "";
+    if (saved && !editing) {
+      phoneBox.append(h("div", { class: "line", style: "display:flex;align-items:center;gap:8px" }, "📞", h("b", { style: "flex:1" }, saved)),
+        h("button", { class: "btn ghost full", onclick: () => drawPhone(true) }, "✎ Изменить номер"));
+      return;
+    }
+    const inp = h("input", { class: "field", style: "margin:0", placeholder: "Телефон", value: saved });
+    phoneBox.append(h("div", { class: "line" }, "📞", inp),
+      h("button", { class: "btn full", onclick: async () => {
+        const v = inp.value.trim(); if (!v) return toast("Введите номер");
+        await db.collection("users").doc(me.uid).set({ phone: v }, { merge: true }); u.phone = v; toast("Сохранено"); drawPhone(false);
+      } }, "Сохранить телефон"),
+      saved ? h("button", { class: "btn gray full", onclick: () => drawPhone(false) }, "Отмена") : null);
+    inp.focus();
+  };
+  drawPhone(false);
   const body = h("div", { class: "card-c" }, avatar(u.name, u.photo, 90), h("h3", {}, u.name),
     h("div", { style: "color:var(--muted)" }, [u.position, u.dept ? deptName(u.dept) : "", officeLabel(u.office)].filter(Boolean).join(" · ")),
     h("div", { class: "line" }, "✉️ " + (u.email || "")),
-    h("div", { class: "line" }, "📞", h("input", { id: "ph", class: "field", style: "margin:0", placeholder: "Телефон", value: u.phone || "" })),
-    h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(me.uid).set({ phone: $("#ph").value.trim() }, { merge: true }); toast("Сохранено"); } }, "Сохранить телефон"),
+    phoneBox,
     h("button", { class: "btn red full", onclick: () => { close(); auth.signOut(); } }, "Выйти"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Закрыть"),
     h("div", { style: "text-align:center;color:var(--muted);font-size:12px;margin-top:8px" }, "Веб-версия: " + WEB_VERSION));
