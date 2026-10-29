@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 11";
+const WEB_VERSION = "29.10.2026 · сборка 12";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -857,10 +857,20 @@ function buildCalc(m) {
 }
 function seg(names, cur, on) { return h("div", { class: "seg" }, ...names.map((n, i) => h("button", { class: cur === i ? "on" : "", onclick: () => on(i) }, n))); }
 function ctrl(label, el) { return h("div", {}, h("label", {}, label), el); }
-function card(i, price, l1, l2, l3, future) {
+async function openRateFile(id) {
+  toast("Открываю файл…");
+  try {
+    const j = await docsCall("action=ratefile&id=" + encodeURIComponent(id));
+    const bin = atob(j.b64), arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const ext = j.name.split(".").pop().toLowerCase(), mime = ext === "pdf" ? "application/pdf" : /^(jpe?g|png)$/.test(ext) ? "image/" + ext.replace("jpg", "jpeg") : "";
+    if (mime) window.open(URL.createObjectURL(new Blob([arr], { type: mime })), "_blank"); else download(j.name, j.b64);
+  } catch (e) { toast(e.message || "Не удалось открыть файл"); }
+}
+function card(i, price, l1, l2, l3, future, file) {
   return h("div", { class: "rc" + (i === 0 && !future ? " best" : ""), style: future ? "opacity:.85" : "" }, h("div", { class: "p" }, price),
     h("div", {}, h("div", { class: "c1" }, (i === 0 && !future ? "★ " : "") + l1),
-      h("div", { class: "sm" }, l2 + " · ", future ? h("span", { style: "color:#d32f2f;font-weight:600" }, l3 + " · ещё не действует") : l3)));
+      h("div", { class: "sm" }, l2 + " · ", future ? h("span", { style: "color:#d32f2f;font-weight:600" }, l3 + " · ещё не действует") : l3)),
+    file ? h("button", { title: "Открыть файл со ставкой", style: "margin-left:auto;flex:none;align-self:center;border:0;background:rgba(0,0,0,.07);border-radius:10px;font-size:18px;padding:6px 9px;cursor:pointer", onclick: e => { e.stopPropagation(); openRateFile(file); } }, "📄") : null);
 }
 const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
 let ratesLoaded = false;
@@ -930,10 +940,10 @@ function railBlock(draw) {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
     const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : a.price - b.price));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future)); return; }
+    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future, r.file)); return; }
       const k = rkey(r), cb = h("input", { type: "checkbox", style: "width:20px;height:20px;margin:0 10px 0 0;flex:none" });
       cb.checked = SEL.has(k); cb.onchange = () => { cb.checked ? SEL.add(k) : SEL.delete(k); draw(); };
-      const el = card(1, money(r.price), r.contractor, r.station, per(r), false);
+      const el = card(1, money(r.price), r.contractor, r.station, per(r), false, r.file);
       el.classList.remove("best"); el.style.opacity = ".7"; el.style.background = "#eceff1";
       el.querySelector(".sm").append(" · ", h("span", { style: "color:#6d4c41;font-weight:600" }, "в архиве — нужна замена"));
       el.style.alignItems = "center"; el.prepend(cb); col.append(el); });
