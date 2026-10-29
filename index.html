@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 12";
+const WEB_VERSION = "29.10.2026 · сборка 13";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -870,7 +870,7 @@ function card(i, price, l1, l2, l3, future, file) {
   return h("div", { class: "rc" + (i === 0 && !future ? " best" : ""), style: future ? "opacity:.85" : "" }, h("div", { class: "p" }, price),
     h("div", {}, h("div", { class: "c1" }, (i === 0 && !future ? "★ " : "") + l1),
       h("div", { class: "sm" }, l2 + " · ", future ? h("span", { style: "color:#d32f2f;font-weight:600" }, l3 + " · ещё не действует") : l3)),
-    file ? h("button", { title: "Открыть файл со ставкой", style: "margin-left:auto;flex:none;align-self:center;border:0;background:rgba(0,0,0,.07);border-radius:10px;font-size:18px;padding:6px 9px;cursor:pointer", onclick: e => { e.stopPropagation(); openRateFile(file); } }, "📄") : null);
+    file ? h("button", { title: "Открыть файл со ставкой", style: "margin-left:auto;flex:none;align-self:center;border:0;background:transparent;border-radius:8px;font-size:13px;line-height:1;padding:3px 4px;opacity:.7;cursor:pointer", onclick: e => { e.stopPropagation(); openRateFile(file); } }, "📄") : null);
 }
 const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
 let ratesLoaded = false;
