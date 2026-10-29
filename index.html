@@ -470,7 +470,7 @@ function assignDialog(u) {
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 8";
+const WEB_VERSION = "29.10.2026 · сборка 9";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -884,7 +884,7 @@ function railBlock(draw) {
   const AR = activeRates().filter(r => !r.arch || (isAdmin && SHOWARCH)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление Владивосток"),
     h("div", { class: "ctrl" },
-      ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c)))),
+      ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => { const n = isAdmin ? activeRates().filter(r => r.arch && r.city === c).length : 0; return h("option", { value: c, selected: c === calc.city }, c + (n ? " · архив: " + n : "")); }))),
       ctrl("Контейнер", seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }))));
   if (isAdmin) {
     const nA = activeRates().filter(r => r.arch).length;
@@ -902,6 +902,28 @@ function railBlock(draw) {
       } catch (e) { toast(e.message || "Не получилось удалить"); }
     } }, "🗑 Удалить выбранные (" + SEL.size + ")"));
     d.append(bar);
+    if (SHOWARCH) {
+      const al = activeRates().filter(r => r.arch), by = {};
+      al.forEach(r => (by[r.contractor] = by[r.contractor] || []).push(r));
+      const box = h("div", { style: "background:#eceff1;border-radius:12px;padding:10px 12px;margin:0 0 12px" },
+        h("div", { style: "font-weight:700;margin-bottom:6px" }, "🗄 Архив по всем городам (" + al.length + ")"),
+        h("div", { style: "font-size:12px;opacity:.75;margin-bottom:6px" }, "Отметьте галочкой — удалится весь архив этого контрагента. Нажмите на строку, чтобы перейти к ней."));
+      if (!al.length) box.append(h("div", {}, "Архивных ставок нет."));
+      Object.keys(by).sort((a, b) => a.localeCompare(b, "ru")).forEach(c => {
+        const rows = by[c].sort((a, b) => a.city.localeCompare(b.city, "ru") || a.type - b.type || a.vat - b.vat);
+        const all = rows.every(r => SEL.has(rkey(r)));
+        const hc = h("input", { type: "checkbox", style: "width:18px;height:18px;margin:0 8px 0 0" }); hc.checked = all;
+        hc.onchange = () => { rows.forEach(r => hc.checked ? SEL.add(rkey(r)) : SEL.delete(rkey(r))); draw(); };
+        box.append(h("div", { style: "display:flex;align-items:center;font-weight:700;margin-top:8px" }, hc, c + " — " + rows.length));
+        rows.forEach(r => {
+          const cb = h("input", { type: "checkbox", style: "width:16px;height:16px;margin:0 8px 0 0;flex:none" }); cb.checked = SEL.has(rkey(r));
+          cb.onclick = e => e.stopPropagation(); cb.onchange = () => { cb.checked ? SEL.add(rkey(r)) : SEL.delete(rkey(r)); draw(); };
+          box.append(h("div", { style: "display:flex;align-items:center;font-size:13px;padding:3px 0 3px 26px;cursor:pointer", onclick: () => { calc.city = r.city; calc.type = r.type; draw(); } },
+            cb, h("span", {}, r.city + " · " + TYPE_NAMES[r.type] + " · НДС " + r.vat + "% · " + money(r.price) + " · " + r.from.slice(0, 5) + "–" + r.to)));
+        });
+      });
+      d.append(box);
+    }
   }
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
