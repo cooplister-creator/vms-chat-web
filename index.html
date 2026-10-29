@@ -446,11 +446,12 @@ function openDirect(u) {
     renderTab(); selectRoom(ROOMS.find(r => r.id === id) || { id, type: "direct", name: "", members: [me.uid, u.uid], lastText: "", lastTime: 0, lastName: "", lastUid: "", unread: 0 });
   });
 }
+const adminBadge = u => u && u.admin ? h("span", { style: "margin-left:6px;font-size:11px;font-weight:700;color:#8a5a00;background:#ffe08a;border-radius:8px;padding:2px 7px;white-space:nowrap" }, "👑 Админ") : null;
 function contactCard(u) {
   if (!u) return;
   let close;
   const sub = [u.position, u.dept ? deptName(u.dept) : "", officeLabel(u.office)].filter(Boolean).join(" · ");
-  const body = h("div", { class: "card-c" }, avatar(u.name, u.photo, 90, online(u)), h("h3", { style: "margin:10px 0 2px" }, u.name),
+  const body = h("div", { class: "card-c" }, avatar(u.name, u.photo, 90, online(u)), h("h3", { style: "margin:10px 0 2px" }, u.name, adminBadge(u)),
     h("div", { style: "color:var(--muted)" }, sub),
     h("div", { style: "margin-top:12px" },
       h("div", { class: "line" }, "📞", u.phone ? h("a", { href: "tel:" + u.phone }, u.phone) : h("span", { style: "color:var(--muted)" }, "Телефон не указан")),
@@ -479,7 +480,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 17";
+const WEB_VERSION = "29.10.2026 · сборка 18";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -527,7 +528,7 @@ function myProfile() {
     inp.focus();
   };
   drawPhone(false);
-  const body = h("div", { class: "card-c" }, avatar(u.name, u.photo, 90), h("h3", {}, u.name),
+  const body = h("div", { class: "card-c" }, avatar(u.name, u.photo, 90), h("h3", {}, u.name, adminBadge(u)),
     h("div", { style: "color:var(--muted)" }, [u.position, u.dept ? deptName(u.dept) : "", officeLabel(u.office)].filter(Boolean).join(" · ")),
     h("div", { class: "line" }, "✉️ " + (u.email || "")),
     phoneBox,
@@ -1020,7 +1021,7 @@ function buildDepts(m) {
       const d = DEPTS.find(x => x[0] === key);
       const box = h("div", { class: "dept" }, h("div", { class: "dh" }, (d ? d[2] + " " + d[1] : "Без отдела"), h("span", { class: "cnt" }, list.length)));
       list.forEach(u => box.append(h("div", { class: "prow", onclick: () => contactCard(u) }, avatar(u.name, u.photo, 28, online(u)),
-        h("div", { class: "pm" }, h("span", { class: "pn" }, u.name), h("span", { class: "ps" }, [u.position, officeLabel(u.office)].filter(Boolean).join(" · "))))));
+        h("div", { class: "pm" }, h("span", { class: "pn" }, u.name, adminBadge(u)), h("span", { class: "ps" }, [u.position, officeLabel(u.office)].filter(Boolean).join(" · "))))));
       if (!list.length) box.append(h("div", { class: "ps", style: "padding:2px 12px 8px" }, "Пока никого"));
       grid.append(box);
     });
