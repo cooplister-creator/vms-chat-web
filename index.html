@@ -480,7 +480,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 19";
+const WEB_VERSION = "29.10.2026 · сборка 20";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -921,12 +921,16 @@ function activeRates() {
   const a = RATES.filter(r => { const f = pd(r.from), e = pd(r.to); return true; }).map(r => { const f = pd(r.from), e = pd(r.to); return Object.assign({}, r, { future: !!(f && f > t), fd: f ? f.getTime() : 0, arch: !!(e && e < t), td: e ? e.getTime() : 0 }); });
   return a;
 }
+const MAIN_CITIES = ["Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Красноярск", "Иркутск", "Казань", "Ростов-на-Дону", "Краснодар", "Самара", "Челябинск", "Омск"];
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
   const AR = activeRates().filter(r => !r.arch || (isAdmin && SHOWARCH)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление Владивосток"),
     h("div", { class: "ctrl" },
-      ctrl("Куда", h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => { const n = isAdmin ? activeRates().filter(r => r.arch && r.city === c).length : 0; return h("option", { value: c, selected: c === calc.city }, c + (n ? " · архив: " + n : "")); }))),
+      ctrl("Куда", h("div", {},
+        h("div", { style: "display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px" }, ...cities.filter(c => MAIN_CITIES.includes(c)).sort((x, y) => MAIN_CITIES.indexOf(x) - MAIN_CITIES.indexOf(y)).map(c =>
+          h("button", { style: "border:0;border-radius:14px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;" + (c === calc.city ? "background:#1e56a8;color:#fff" : "background:#ffe08a;color:#5a3d00"), onclick: () => { calc.city = c; draw(); } }, c))),
+        h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.slice().sort((x, y) => { const ix = MAIN_CITIES.indexOf(x), iy = MAIN_CITIES.indexOf(y); return (ix < 0) - (iy < 0) || (ix >= 0 ? ix - iy : x.localeCompare(y, "ru")); }).map(c => { const n = isAdmin ? activeRates().filter(r => r.arch && r.city === c).length : 0; const main = MAIN_CITIES.includes(c); return h("option", { value: c, selected: c === calc.city, style: main ? "font-weight:700;background:#fff4cc;color:#5a3d00" : "" }, (main ? "★ " : "") + c + (n ? " · архив: " + n : "")); })))),
       ctrl("Контейнер", seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }))));
   if (isAdmin) {
     const nA = activeRates().filter(r => r.arch).length;
