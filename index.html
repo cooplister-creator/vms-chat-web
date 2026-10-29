@@ -468,13 +468,18 @@ function assignDialog(u) {
   const pos = h("input", { class: "field", placeholder: "Должность", value: u.position || "" });
   close = modal(h("div", {}, h("h3", {}, u.name), h("span", { class: "lbl" }, "Отдел"), dep, h("span", { class: "lbl" }, "Офис"), off, h("span", { class: "lbl" }, "Должность"), pos,
     h("button", { class: "btn full", onclick: async () => { await db.collection("users").doc(u.uid).update({ dept: dep.value, office: off.value, position: pos.value.trim() }); close(); toast("Сохранено"); } }, "Сохранить"),
+    u.uid !== me.uid && u.approved !== false ? h("button", { class: "btn ghost full", onclick: async () => {
+      const on = !u.admin;
+      if (!confirm(on ? "Назначить «" + u.name + "» администратором?\n\nАдминистратор может согласовывать людей, удалять их из чата, загружать и удалять доверенности и ставки." : "Снять права администратора у «" + u.name + "»?")) return;
+      try { await db.collection("users").doc(u.uid).update({ admin: on }); close(); toast(on ? "Назначен администратором" : "Права сняты"); } catch (e) { toast("Не удалось: " + (e.message || "нет прав")); }
+    } }, u.admin ? "👑 Снять права администратора" : "👑 Назначить администратором") : null,
     u.uid !== me.uid && !u.admin ? h("button", { class: "btn ghost full", style: "color:#c62828", onclick: async () => {
       if (!confirm("Удалить «" + u.name + "» из чата?\n\nДоступ будет закрыт. Чтобы вернуться, человеку нужно заново пройти согласование администратором.")) return;
       try { await db.collection("users").doc(u.uid).update({ approved: false }); close(); toast("Удалён из чата"); } catch (e) { toast("Не удалось удалить"); }
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 16";
+const WEB_VERSION = "29.10.2026 · сборка 17";
 (function updateWatch() {
   let shown = false;
   async function check() {
