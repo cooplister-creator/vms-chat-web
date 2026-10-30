@@ -354,8 +354,10 @@ auth.onAuthStateChanged(async u => {
     if (d.exists) await ref.set({ name: myName, email: u.email || "" }, { merge: true });
     else await ref.set({ name: myName, email: u.email || "", approved: false, lastSeen: 0 });
   } catch (e) { console.warn(e); }
+  let seenSelf = false;
   unsubs.push(ref.onSnapshot(d => {
-    if (!d.exists) return;
+    if (!d.exists) { if (seenSelf && !d.metadata.hasPendingWrites) { toast("Ваш доступ закрыт администратором"); auth.signOut(); } return; }
+    seenSelf = true;
     const x = d.data(); isAdmin = x.admin === true;
     const st = x.approved === false ? "pending" : "ok";
     if (st !== status) { status = st; st === "ok" ? startApp() : showPending(); }
@@ -503,12 +505,12 @@ function assignDialog(u) {
       try { await db.collection("users").doc(u.uid).update({ admin: on }); close(); toast(on ? "Назначен администратором" : "Права сняты"); } catch (e) { toast("Не удалось: " + (e.message || "нет прав")); }
     } }, u.admin ? "👑 Снять права администратора" : "👑 Назначить администратором") : null,
     u.uid !== me.uid && !u.admin && !u.owner ? h("button", { class: "btn ghost full", style: "color:#c62828", onclick: async () => {
-      if (!confirm("Удалить «" + u.name + "» из чата?\n\nДоступ будет закрыт. Чтобы вернуться, человеку нужно заново пройти согласование администратором.")) return;
-      try { await db.collection("users").doc(u.uid).update({ approved: false }); close(); toast("Удалён из чата"); } catch (e) { toast("Не удалось удалить"); }
-    } }, "🗑 Удалить из чата") : null,
+      if (!confirm("Удалить «" + u.name + "» из системы?\n\nОн исчезнет из списков и потеряет доступ. Вернуться сможет, только войдя заново и отправив новую заявку на подтверждение.")) return;
+      try { await db.collection("users").doc(u.uid).delete(); close(); toast("Удалён из системы"); } catch (e) { toast("Не удалось удалить: " + (e.message || "нет прав")); }
+    } }, "🗑 Удалить из системы") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 50";
+const WEB_VERSION = "30.10.2026 · сборка 51";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1098,7 +1100,8 @@ function buildDepts(m) {
     const pend = Object.values(USERS).filter(u => u.approved === false);
     if (isAdmin && pend.length) w.append(h("div", { class: "dept", style: "margin-bottom:10px" }, h("div", { class: "dh" }, "🆕 Заявки на вход", h("span", {}, pend.length)),
       ...pend.map(u => h("div", { class: "prow" }, avatar(u.name, u.photo, 28), h("div", { class: "pm" }, h("span", { class: "pn" }, u.name), h("span", { class: "ps" }, u.email || "")),
-        h("button", { class: "btn sm2", onclick: () => db.collection("users").doc(u.uid).update({ approved: true }).then(() => toast("Подтверждён")) }, "Подтвердить")))));
+        h("button", { class: "btn sm2", onclick: () => db.collection("users").doc(u.uid).update({ approved: true }).then(() => toast("Подтверждён")) }, "Подтвердить"),
+        h("button", { class: "btn ghost sm2", style: "margin-left:6px;color:#c62828", onclick: () => { if (confirm("Отклонить заявку «" + u.name + "»? Заявка исчезнет; человек сможет подать её снова.")) db.collection("users").doc(u.uid).delete().then(() => toast("Заявка отклонена")).catch(e => toast("Не удалось: " + (e.message || "нет прав"))); } }, "Отклонить")))));
     const all = staff(), grid = h("div", { class: "dgrid" });
     [...DEPTS.map(d => d[0]), ""].forEach(key => {
       const list = all.filter(u => (key ? u.dept === key : !DEPTS.some(d => d[0] === u.dept)) && (!deptOffice || u.office === deptOffice))
