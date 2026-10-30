@@ -427,7 +427,8 @@ function renderTab() {
 let RT = JSON.parse(localStorage.getItem("rt") || "null");
 async function moexCny() {   // биржевой курс юаня (Мосбиржа, ISS), без ключей
   try {
-    const j = await (await fetch("https://iss.moex.com/iss/engines/currency/markets/selt/boards/CETS/securities/CNYRUB_TOM.json?iss.meta=off&iss.only=marketdata,securities")).json();
+    const ac = new AbortController(); setTimeout(() => ac.abort(), 6000);
+    const j = await (await fetch("https://iss.moex.com/iss/engines/currency/markets/selt/boards/CETS/securities/CNYRUB_TOM.json?iss.meta=off&iss.only=marketdata,securities", { signal: ac.signal })).json();
     const col = (blk, n) => { const i = j[blk].columns.indexOf(n); return i < 0 ? null : j[blk].data[0][i]; };
     let v = col("marketdata", "LAST") || col("marketdata", "LCURRENTPRICE");
     if (!v) { const b = col("marketdata", "BID"), o = col("marketdata", "OFFER"); if (b && o) v = (b + o) / 2; }
@@ -442,9 +443,8 @@ async function loadRates() {
     RT = { usd: j.Valute.USD, eur: j.Valute.EUR, cny: j.Valute.CNY, date: (j.Date || "").slice(8, 10) + "." + (j.Date || "").slice(5, 7), upd: Date.now(), failed: false };
     localStorage.setItem("rt", JSON.stringify(RT));
   } catch (e) { RT = RT ? { ...RT, failed: true } : { failed: true }; }
-  const mb = await moexCny();
-  if (mb && RT) { RT.mb = mb; localStorage.setItem("rt", JSON.stringify(RT)); }
   paintRates();
+  moexCny().then(mb => { if (mb && RT) { RT.mb = mb; localStorage.setItem("rt", JSON.stringify(RT)); paintRates(); } });
 }
 setInterval(() => { if (me) loadRates(); }, 3 * 3600 * 1000);
 function paintRates() {
@@ -507,7 +507,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 27";
+const WEB_VERSION = "30.10.2026 · сборка 28";
 (function updateWatch() {
   let shown = false;
   async function check() {
