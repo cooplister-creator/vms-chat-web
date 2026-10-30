@@ -388,7 +388,7 @@ function startApp() {
   document.addEventListener("visibilitychange", vis);
   window.addEventListener("pagehide", () => { navigator.sendBeacon && 0; });
   unsubs.push(() => { clearInterval(iv); document.removeEventListener("visibilitychange", vis); });
-  loadRates();
+  loadCb();
 }
 
 /* ---------- каркас ---------- */
@@ -436,7 +436,7 @@ async function moexCny() {   // биржевой курс юаня (Мосбир
     return v ? { Value: v, Previous: pv, Nominal: 1 } : null;
   } catch (e) { return null; }
 }
-async function loadRates() {
+async function loadCb() {
   const b = $(".rbtn"); if (b) b.textContent = "…";
   try {
     const j = await (await fetch("https://www.cbr-xml-daily.ru/daily_json.js")).json();
@@ -446,10 +446,10 @@ async function loadRates() {
   paintRates();
   moexCny().then(mb => { if (mb && RT) { RT.mb = mb; localStorage.setItem("rt", JSON.stringify(RT)); paintRates(); } });
 }
-setInterval(() => { if (me) loadRates(); }, 3 * 3600 * 1000);
+setInterval(() => { if (me) loadCb(); }, 3 * 3600 * 1000);
 function paintRates() {
   const box = $("#rates"), info = $("#rinfo"); if (!box) return;
-  if (RT && !RT.cny && !RT.failed && !window._cnyTry) { window._cnyTry = 1; setTimeout(loadRates, 50); }
+  if (RT && !RT.cny && !RT.failed && !window._cnyTry) { window._cnyTry = 1; setTimeout(loadCb, 50); }
   box.innerHTML = "";
   const chip = (s, v) => {
     const p = h("span", { class: "pill" }, h("b", {}, s));
@@ -460,7 +460,7 @@ function paintRates() {
     if (Math.abs(d) > 0.0005) p.append(h("span", { class: d > 0 ? "up" : "dn" }, d > 0 ? " ▲" : " ▼"));
     return p;
   };
-  box.append(chip("$", RT && RT.usd), chip("€", RT && RT.eur), chip("CN¥", RT && RT.cny), chip("МБ CN¥", RT && RT.mb), h("button", { class: "rbtn", title: "Обновить курс", onclick: loadRates }, "⟳"));
+  box.append(chip("$", RT && RT.usd), chip("€", RT && RT.eur), chip("CN¥", RT && RT.cny), chip("МБ CN¥", RT && RT.mb), h("button", { class: "rbtn", title: "Обновить курс", onclick: loadCb }, "⟳"));
   const d = RT && RT.upd ? new Date(RT.upd) : null;
   info.textContent = "ЦБ" + (RT && RT.date ? " на " + RT.date : "") + " · обн. " + (d ? pad(d.getDate()) + "." + pad(d.getMonth() + 1) + " " + fmtTime(RT.upd) : "—") + (RT && RT.failed ? " · нет связи" : "");
 }
@@ -507,7 +507,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 28";
+const WEB_VERSION = "30.10.2026 · сборка 29";
 (function updateWatch() {
   let shown = false;
   async function check() {
