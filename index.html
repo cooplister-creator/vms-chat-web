@@ -154,9 +154,11 @@ nav button{padding:8px 6px;font-size:14px}
 .tb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--navy);color:#fff;border-radius:12px;padding:8px 14px;margin-bottom:10px}
 .tb b{font-size:16px;margin-right:auto}
 .tb label{display:flex;gap:6px;align-items:center;background:#ffffff1f;padding:5px 12px;border-radius:16px;cursor:pointer;font-size:14px}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.grid2>*{min-width:0}
+.cityrow{max-width:100%}
 .grid2.one{grid-template-columns:minmax(0,760px)}
-@media (max-width:1000px){.grid2{grid-template-columns:1fr}}
+@media (max-width:1000px){.grid2{grid-template-columns:minmax(0,1fr)}}
 .blk{background:var(--card);border-radius:14px;padding:12px 14px}
 .bt{font-weight:700;color:var(--navy);font-size:16px;margin-bottom:8px}
 @media (prefers-color-scheme:dark){.bt{color:#9ecbff}}
@@ -166,7 +168,8 @@ nav button{padding:8px 6px;font-size:14px}
 select.sel{padding:7px 10px;border-radius:10px;background:var(--bg)}
 .seg{margin:0;gap:4px}
 .seg button{padding:7px 4px;font-size:13px;border-radius:10px}
-.vgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+.vgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;margin-top:8px}
+.vgrid>*{min-width:0}
 @media (max-width:640px){.vgrid{grid-template-columns:1fr}}
 h2.v{margin:6px 0 2px;font-size:14px;color:var(--ocean)}
 .rc{display:flex;gap:10px;align-items:center;padding:7px 10px;margin:4px 0;border-radius:10px;background:var(--bg)}
@@ -502,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 33";
+const WEB_VERSION = "30.10.2026 · сборка 34";
 (function updateWatch() {
   let shown = false;
   async function check() {
