@@ -330,7 +330,7 @@ function showAuth() {
         const r = await auth.createUserWithEmailAndPassword(email.value.trim(), pass.value);
         await r.user.updateProfile({ displayName: name.value.trim() });
       } else await auth.signInWithEmailAndPassword(email.value.trim(), pass.value);
-    } catch (e) { err.textContent = e.message || "Ошибка"; }
+    } catch (e) { err.textContent = authRu(e); }
     go.disabled = false;
   };
   go.onclick = submit; pass.onkeydown = e => { if (e.key === "Enter") submit(); };
@@ -510,7 +510,15 @@ function assignDialog(u) {
     } }, "🗑 Удалить из системы") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 51";
+function authRu(e) {
+  const c = (e && e.code || "").replace("auth/", "");
+  const M = { "invalid-email": "Неверный адрес почты", "user-disabled": "Учётная запись отключена", "user-not-found": "Пользователь с такой почтой не найден. Сначала зарегистрируйтесь",
+    "wrong-password": "Неверный пароль", "invalid-credential": "Неверная почта или пароль. Если вы ещё не зарегистрированы — нажмите «Регистрация»", "invalid-login-credentials": "Неверная почта или пароль. Если вы ещё не зарегистрированы — нажмите «Регистрация»",
+    "email-already-in-use": "Эта почта уже зарегистрирована. Войдите с паролем", "weak-password": "Слишком простой пароль (минимум 6 символов)", "too-many-requests": "Слишком много попыток. Подождите немного и повторите",
+    "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
+  return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
+}
+const WEB_VERSION = "30.10.2026 · сборка 52";
 (function updateWatch() {
   let shown = false;
   async function check() {
