@@ -437,6 +437,7 @@ async function loadRates() {
 setInterval(() => { if (me) loadRates(); }, 3 * 3600 * 1000);
 function paintRates() {
   const box = $("#rates"), info = $("#rinfo"); if (!box) return;
+  if (RT && !RT.cny && !RT.failed && !window._cnyTry) { window._cnyTry = 1; setTimeout(loadRates, 50); }
   box.innerHTML = "";
   const chip = (s, v) => {
     const p = h("span", { class: "pill" }, h("b", {}, s));
@@ -494,7 +495,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 24";
+const WEB_VERSION = "30.10.2026 · сборка 25";
 (function updateWatch() {
   let shown = false;
   async function check() {
