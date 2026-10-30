@@ -505,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 38";
+const WEB_VERSION = "30.10.2026 · сборка 39";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1647,12 +1647,6 @@ function buildBot(m) {
   }
   btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
   draw(); inp.focus();
-  if (!window.BOT_GREETED) { window.BOT_GREETED = true;
-    (async () => { try { const j = DOCS ? { docs: DOCS } : await docsCall("action=list"); DOCS = j.docs;
-      const today = new Date(new Date().toDateString()), poa = DOCS.filter(d => d.kind === "poa"), U = d => parseUntil(d.until);
-      const exp = poa.filter(d => U(d) && U(d) < today).length, soon = poa.filter(d => U(d) && U(d) >= today && U(d).getTime() <= today.getTime() + 14 * 864e5);
-      if (exp || soon.length) { BOT.push({ me: false, text: "👋 Кстати: " + (soon.length ? "в ближайшие 14 дней заканчиваются доверенности — " + soon.length + " шт." : "срочных доверенностей на 14 дней нет") + (exp ? "; уже просрочено — " + exp + "." : "."), chips: (soon.length ? ["Что истекает скоро"] : []).concat(exp ? ["Просроченные доверенности"] : []) }); draw(); }
-    } catch (e) {} })(); }
 }
 </script>
 </body>
