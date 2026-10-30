@@ -502,7 +502,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 32";
+const WEB_VERSION = "30.10.2026 · сборка 33";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1026,7 +1026,7 @@ function freightBlock(draw) {
   if (!FR) { loadFreight(draw); return msg("Загружаю ставки…"); }
   if (!FR.rows.length) return msg(FR.err ? "Не удалось загрузить: " + FR.err : "Ставок фрахта пока нет. Администратор может загрузить прайс помощнику.");
   const t0 = new Date(); t0.setHours(0, 0, 0, 0);
-  // r: 0 линия, 1 порт отпр., 2 порт назн., 3 довоз, 4 тип, 5 20GP, 6 40HQ, 7 рейс, 8 дней, 9 до, 10 условия, 11 примечание, 12 даты отхода
+  // r: 0 линия, 1 порт отпр., 2 порт назн., 3 дроп, 4 тип, 5 20GP, 6 40HQ, 7 рейс, 8 дней, 9 до, 10 условия, 11 примечание, 12 даты отхода
   const live = FR.rows.filter(r => { const e = frDate(r[9]); return !e || e >= t0; });
   const cnt = {}; live.forEach(r => cnt[r[1]] = (cnt[r[1]] || 0) + 1);
   const ports = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
@@ -1046,7 +1046,7 @@ function freightBlock(draw) {
     h("select", { class: "sel", title: "Порт назначения", onchange: e => { calc.fpod = e.target.value; draw(); } }, ...pods.map(p => h("option", { value: p, selected: p === calc.fpod }, "→ " + p)))));
   d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...cities.filter(c => c === FR_PORT || MAIN_CITIES.includes(c)).map(c => h("button", { class: "chip" + (c === calc.fcity ? " on" : ""), onclick: () => { calc.fcity = c; draw(); } }, c === FR_PORT ? "⚓ Только порт" : "🚚 " + c))));
   const ctl = h("div", { class: "ctl2" },
-    h("select", { class: "sel", title: "Довоз до города", onchange: e => { calc.fcity = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.fcity }, c === FR_PORT ? "Только порт (без довоза)" : "Довоз: " + c))),
+    h("select", { class: "sel", title: "ДРОП до города", onchange: e => { calc.fcity = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.fcity }, c === FR_PORT ? "Только порт (без дропа)" : "ДРОП: " + c))),
     seg(["20GP", "40HQ"], calc.fsize, i => { calc.fsize = i; draw(); }));
   d.append(ctl);
   const atPort = calc.fcity === FR_PORT;
@@ -1061,7 +1061,7 @@ function freightBlock(draw) {
     const e = frDate(r[9]), left = e ? Math.round((e - t0) / 86400000) : null;
     const price = h("span", {}, usd(r[pi]), usdRate ? h("div", { class: "sm", style: "font-size:11px;font-weight:400" }, "≈ " + money(Math.round(r[pi] * usdRate / 100) * 100)) : null);
     const l3 = h("span", {}, r[9] ? "до " + r[9].slice(0, 5) : "срок не указан", left !== null && left <= 3 ? h("b", { style: "color:#d32f2f" }, " (" + (left === 0 ? "сегодня" : "осталось " + left + " дн.") + ")") : "", r[8] ? " · " + r[8] + " дн." : "", r[7] ? " · " + r[7] : "");
-    const c = card(i, price, r[0], calc.fpol.split(" · ")[0] + " → " + calc.fpod + " · " + kind + (atPort ? "" : " · довоз " + calc.fcity), l3, false, FR.file);
+    const c = card(i, price, r[0], calc.fpol.split(" · ")[0] + " → " + calc.fpod + " · " + kind + (atPort ? "" : " · ДРОП " + calc.fcity), l3, false, FR.file);
     const extra = [r[10] > -1 ? FR.dict[r[10]] : "", r[12] > -1 ? FR.dict[r[12]] : ""].filter(Boolean), note = r[11] > -1 ? FR.dict[r[11]] : "";
     if (extra.length || note) {
       const dt = h("details", { style: "font-size:12px;opacity:.8;margin-top:2px" }, h("summary", { style: "cursor:pointer" }, "Условия"), h("div", { style: "white-space:pre-wrap;padding-top:2px" }, [extra.join(" · "), note].filter(Boolean).join("\n")));
