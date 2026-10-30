@@ -505,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 42";
+const WEB_VERSION = "30.10.2026 · сборка 44";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1295,11 +1295,18 @@ async function docsCall(params) {
   try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате: " + txt.replace(/<[^>]*>/g, " ").trim().slice(0, 120)); }
   if (j.error) throw new Error(j.error); return j;
 }
+const BOT_HELLO = { me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Люкс Фуд», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" };
 function buildBot(m) {
+  // переписка хранится в этом браузере, чтобы не пропадала при обновлении страницы (очистить: «очисти чат»)
+  const BK = "vmsbot_" + (me ? me.uid : "x");
+  if (!window.BOT_LOADED) { window.BOT_LOADED = true; try { const x = JSON.parse(localStorage.getItem(BK) || "null"); if (Array.isArray(x) && x.length) { BOT.length = 0; x.forEach(b => BOT.push(b)); } } catch (e) {} }
+  const saveBot = () => { try { localStorage.setItem(BK, JSON.stringify(BOT.slice(-80).map(b => { const c = Object.assign({}, b); if (c.xlsx) { delete c.xlsx; c.text += " (кнопка Excel пропала после обновления страницы — повторите запрос)"; } delete c.apply; delete c.upload; delete c.pick; delete c.chips; return c; }))); } catch (e) {} };
   const page = h("div", { class: "page", style: "display:flex;flex-direction:column;padding:0" });
   const log = h("div", { style: "flex:1;overflow:auto;padding:16px" });
   const inp = h("input", { class: "field", style: "margin:0;border-radius:22px", placeholder: "Какой документ нужен?" });
   const btn = h("button", { class: "send" }, "➤");
+  // черновик не пропадает, если страница перерисовалась (переключение вкладок, новые сообщения и т.п.)
+  inp.value = window.BOT_DRAFT || ""; inp.addEventListener("input", () => { window.BOT_DRAFT = inp.value; });
   let pickMode = "poa", pendingHint = "";
   const fileIn = h("input", { type: "file", accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*", multiple: true, style: "display:none" });
   const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить файл (доверенность или ставки)", onclick: () => { pickMode = "poa"; fileIn.click(); } }, "📎");
@@ -1329,7 +1336,7 @@ function buildBot(m) {
           h("button", { class: "btn", onclick: () => get(d, false) }, "Открыть"), " ", h("button", { class: "btn ghost", onclick: () => get(d, true) }, "Скачать"),
           b.del ? h("button", { class: "btn ghost", style: "margin-left:6px;color:#c62828", onclick: () => delDoc(d) }, "🗑 Удалить") : null)); });
       if (b.chips && b === BOT[BOT.length - 1]) log.append(h("div", { style: "display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px" }, ...b.chips.map(c => { const o = typeof c === "string" ? { t: c } : c;
-        return h("button", { class: "btn ghost", style: "font-size:12px;padding:5px 10px", onclick: () => { if (o.fill) { inp.value = o.fill; inp.focus(); } else ask(o.send || o.t); } }, o.t); })));
+        return h("button", { class: "btn ghost", style: "font-size:12px;padding:5px 10px", onclick: () => { if (o.fill) { inp.value = o.fill; window.BOT_DRAFT = o.fill; inp.focus(); } else ask(o.send || o.t); } }, o.t); })));
       if (b.fb) log.append(h("div", { style: "font-size:12px;margin:0 0 8px;opacity:.85" }, b.fbDone ? b.fbDone : h("span", {}, "Ответ помог? ",
         h("button", { class: "btn ghost", style: "font-size:12px;padding:2px 8px", onclick: () => rateAns(b, true) }, "👍"), " ",
         h("button", { class: "btn ghost", style: "font-size:12px;padding:2px 8px", onclick: () => rateAns(b, false) }, "👎"))));
@@ -1341,7 +1348,7 @@ function buildBot(m) {
       upd(); clearInterval(busyTimer); busyTimer = setInterval(() => { if (!busy || !lab.isConnected) { clearInterval(busyTimer); return; } upd(); }, 1000);
       log.append(h("div", { class: "thinking" }, h("span", { class: "spin" }), lab));
     } else { busyAt = 0; clearInterval(busyTimer); }
-    log.scrollTop = log.scrollHeight;
+    log.scrollTop = log.scrollHeight; saveBot();
   };
   async function libMove(b, port) {
     if (busy || b.pickDone) return;
@@ -1605,6 +1612,7 @@ function buildBot(m) {
   const isDev = () => !!(USERS[me.uid] && USERS[me.uid].owner);
   async function adminCmd(q) {
     const n = norm(q).trim();
+    if (/^(очист\S*|сотри|удали)\s+(чат|историю|переписку|диалог)/.test(n)) { BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} draw(); return true; }
     let m = /^запомни[:\s]+([\s\S]+?)\s*=\s*([\s\S]+)$/.exec(q.trim().replace(/^Запомни/, "запомни"));
     if (m) { BOT.push({ me: true, text: q });
       if (!isDev()) BOT.push({ me: false, text: "Учить меня может только разработчик." });
@@ -1655,7 +1663,7 @@ function buildBot(m) {
     return {};
   }
   async function ask(qq) {
-    let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = "";
+    let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; window.BOT_DRAFT = "";
     if (await adminCmd(q)) return;
     if (CONF.test(norm(q))) { BOT.push({ me: true, text: "🔒 (вопрос скрыт)" }); BOT.push({ me: false, text: "🔒 Это внутренняя информация — о паролях, доступах, сайтах, ссылках и устройстве системы я не рассказываю. Если нужно, обратитесь к администратору." }); draw(); return; }
     const f = followUp(q);
