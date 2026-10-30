@@ -508,7 +508,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 49";
+const WEB_VERSION = "30.10.2026 · сборка 50";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1298,6 +1298,10 @@ async function docsCall(params) {
   try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате: " + txt.replace(/<[^>]*>/g, " ").trim().slice(0, 120)); }
   if (j.error) throw new Error(j.error); return j;
 }
+// напоминания только для разработчика: date — дата события, warn — за сколько дней начать напоминать
+const DEV_REMINDERS = [
+  { date: "2027-01-26", warn: 30, text: "Истекает токен GitHub «release-vms-chat-web». Обновить: GitHub → Settings → Developer settings → Fine-grained tokens → release-vms-chat-web → Regenerate token; затем вставить новый токен в секрет RELEASE_TOKEN (репозиторий manager-chat → Settings → Secrets and variables → Actions). Иначе сборки перестанут публиковать APK для автообновления." },
+];
 const BOT_HELLO = { me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Люкс Фуд», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" };
 function buildBot(m) {
   // переписка хранится в этом браузере, чтобы не пропадала при обновлении страницы (очистить: «очисти чат»)
@@ -1616,8 +1620,12 @@ function buildBot(m) {
   const HELP_CHIPS = ["Что ты умеешь", "Просроченные доверенности", "Что истекает скоро"];
   const CONF = /парол|логин|пин.?код|токен|api.?ключ|ключ\s+(доступа|api)|секретн|firebase|фаербейс|фаерстор|firestore|apps\s?script|аппс\s?скрипт|скрипт|репозитор|github|гитхаб|исходн\S*\s+код|сервер|база\s+данн|админк|учетн\S*\s+запис|(ссылк|адрес)\S*\s+(на\s+)?(сайт|приложен|таблиц|диск|папк|скрипт)|(какой|что\s+за)\s+(сайт|приложен)|где\s+(лежит|лежат|хранит|находит)|на\s+каком\s+(сайт|диск|сервер)|гугл|google|\bapk\b|скачать\s+приложен|как\s+(устроен|работает)\s+(сайт|приложен|систем|помощник)/;
   const isDev = () => !!(USERS[me.uid] && USERS[me.uid].owner);
+  const remLeft = r => Math.round((new Date(r.date + "T00:00:00") - new Date(new Date().toDateString())) / 864e5);
+  const remText = r => { const d = remLeft(r); return "⏰ " + r.date.split("-").reverse().join(".") + " — " + (d > 0 ? "через " + d + " дн" : d === 0 ? "сегодня" : "срок прошёл " + (-d) + " дн назад") + ".\n" + r.text; };
   async function adminCmd(q) {
     const n = norm(q).trim();
+    if (/^(напоминани|что\s+мне\s+напомнить|мои\s+напоминани)/.test(n)) { BOT.push({ me: true, text: q });
+      BOT.push({ me: false, text: !isDev() ? "Это видит только разработчик." : DEV_REMINDERS.length ? DEV_REMINDERS.map(remText).join("\n\n") : "Напоминаний нет." }); draw(); return true; }
     if (/^(очист\S*|сотри|удали)\s+(чат|историю|переписку|диалог)/.test(n)) { BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} draw(); return true; }
     let m = /^запомни[:\s]+([\s\S]+?)\s*=\s*([\s\S]+)$/.exec(q.trim().replace(/^Запомни/, "запомни"));
     if (m) { BOT.push({ me: true, text: q });
@@ -1692,6 +1700,11 @@ function buildBot(m) {
   }
   btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
   draw(); inp.focus();
+  // разработчику — напоминание о ближайших сроках (не чаще раза в сутки по каждому)
+  if (isDev()) { const today = new Date().toDateString(); let add = false;
+    DEV_REMINDERS.forEach(r => { if (remLeft(r) <= r.warn) { const k = "vmsrem_" + r.date; let seen = ""; try { seen = localStorage.getItem(k) || ""; } catch (e) {}
+      if (seen !== today) { BOT.push({ me: false, text: remText(r) }); try { localStorage.setItem(k, today); } catch (e) {} add = true; } } });
+    if (add) draw(); }
 }
 </script>
 </body>
