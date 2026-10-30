@@ -430,15 +430,17 @@ async function moexCny() {   // биржевой курс юаня (Мосбир
     const col = (blk, n) => { const i = j[blk].columns.indexOf(n); return i < 0 ? null : j[blk].data[0][i]; };
     let v = col("marketdata", "LAST") || col("marketdata", "LCURRENTPRICE");
     if (!v) { const b = col("marketdata", "BID"), o = col("marketdata", "OFFER"); if (b && o) v = (b + o) / 2; }
+    if (!v) v = col("marketdata", "WAPRICE");
     const pv = col("securities", "PREVPRICE") || col("securities", "PREVWAPRICE") || v;
-    return v ? { Value: v, Previous: pv, Nominal: 1 } : null;
+    if (!v) return pv ? { Value: pv, Previous: pv, Nominal: 1, closed: true } : null;   // биржа ещё не торгует — берём цену закрытия
+    return { Value: v, Previous: pv, Nominal: 1 };
   } catch (e) { return null; }
 }
 async function loadCb() {
   const b = $(".rbtn"); if (b) b.textContent = "…";
   try {
     const j = await (await fetch("https://www.cbr-xml-daily.ru/daily_json.js")).json();
-    RT = { usd: j.Valute.USD, eur: j.Valute.EUR, cny: j.Valute.CNY, date: (j.Date || "").slice(8, 10) + "." + (j.Date || "").slice(5, 7), upd: Date.now(), failed: false };
+    RT = { usd: j.Valute.USD, eur: j.Valute.EUR, cny: j.Valute.CNY, date: (j.Date || "").slice(8, 10) + "." + (j.Date || "").slice(5, 7), upd: Date.now(), failed: false, mb: RT && RT.mb };
     localStorage.setItem("rt", JSON.stringify(RT));
   } catch (e) { RT = RT ? { ...RT, failed: true } : { failed: true }; }
   paintRates();
@@ -452,6 +454,7 @@ function paintRates() {
   const chip = (s, v, cls) => {
     const p = h("span", { class: "pill" + (cls ? " " + cls : "") }, h("b", {}, s));
     if (!v) { p.append("—"); return p; }
+    if (v.closed) p.title = "Биржа сейчас не торгует — показана цена закрытия";
     const nm = v.Nominal || 1, val = v.Value / nm;
     p.append(val.toFixed(2).replace(".", ","));
     const d = val - v.Previous / nm;
@@ -505,7 +508,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 46";
+const WEB_VERSION = "30.10.2026 · сборка 47";
 (function updateWatch() {
   let shown = false;
   async function check() {
