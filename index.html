@@ -518,7 +518,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "30.10.2026 · сборка 54";
+const WEB_VERSION = "30.10.2026 · сборка 55";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1571,6 +1571,9 @@ function buildBot(m) {
   }
   /* ---------- «ум» помощника: память разговора, обучение, подсказки ---------- */
   const botLog = o => { try { db.collection("botLog").add(Object.assign({ uid: me.uid, name: myName || "", ts: Date.now() }, o)).catch(() => {}); } catch (e) {} };
+  let IDEAS = [];
+  const ideaDate = ts => new Date(ts || Date.now()).toLocaleDateString("ru-RU");
+  async function ideasList(done) { const s = await db.collection("botIdeas").orderBy("ts", "desc").limit(150).get(); return s.docs.filter(d => (d.data().status === "done") === done); }
   function ideaDialog(b) {
     const ta = h("textarea", { style: "width:100%;min-height:90px;box-sizing:border-box;padding:8px;border-radius:10px;border:1px solid #ccc;font:inherit", placeholder: "Например: на этот вопрос нужно отвечать так…" });
     let close;
@@ -1651,17 +1654,35 @@ function buildBot(m) {
   const remText = r => { const d = remLeft(r); return "⏰ " + r.date.split("-").reverse().join(".") + " — " + (d > 0 ? "через " + d + " дн" : d === 0 ? "сегодня" : "срок прошёл " + (-d) + " дн назад") + ".\n" + r.text; };
   async function adminCmd(q) {
     const n = norm(q).trim();
+    if (/^(отработан\S*(\s+(предложени\S*|идеи|список))?|архив\s+предложени\S*)$/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
+      try { const ds = await ideasList(true);
+        BOT.push({ me: false, text: ds.length ? "✅ Отработано (" + ds.length + "):\n\n" + ds.slice(0, 20).map((d, i) => { const x = d.data(); return (i + 1) + ". " + (x.name || "?") + ", " + ideaDate(x.ts) + " → отработано " + ideaDate(x.doneTs || x.ts) + "\nВопрос: «" + (x.q || "") + "»\nПредложение: " + (x.idea || "") + (x.note ? "\nМоя заметка: " + x.note : ""); }).join("\n\n") + "\n\nУбрать отработанные навсегда: «очисти отработанные»." : "Отработанных пока нет." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
     if (/^(предложени|идеи|что\s+предлагают)/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
       busy = true; draw();
-      try { const s = await db.collection("botIdeas").orderBy("ts", "desc").limit(20).get();
-        BOT.push(s.empty ? { me: false, text: "Предложений пока нет." } : { me: false, text: "💡 Предложения (" + s.size + "):\n\n" + s.docs.map((d, i) => { const x = d.data(); return (i + 1) + ". " + (x.name || "?") + ", " + new Date(x.ts).toLocaleDateString("ru-RU") + "\nВопрос: «" + (x.q || "") + "»\nПредложение: " + (x.idea || ""); }).join("\n\n") + "\n\nНажмите на вопрос ниже, допишите ответ после «=» и отправьте — я запомню. Убрать все: «очисти предложения».",
-          chips: s.docs.slice(0, 6).filter(d => d.data().q).map(d => ({ t: "✏️ " + d.data().q.slice(0, 32), fill: "запомни: " + d.data().q + " = " })) }); }
+      try { const ds = await ideasList(false); IDEAS = ds.slice(0, 20);
+        BOT.push(!IDEAS.length ? { me: false, text: "Новых предложений нет 👍 Отработанные: «отработанные»." } : { me: false, text: "💡 Предложения (" + IDEAS.length + "):\n\n" + IDEAS.map((d, i) => { const x = d.data(); return (i + 1) + ". " + (x.status === "seen" ? "👀 " : "🆕 ") + (x.name || "?") + ", " + ideaDate(x.ts) + "\nВопрос: «" + (x.q || "") + "»\nПредложение: " + (x.idea || ""); }).join("\n\n") + "\n\nКогда обработали: «готово 1» (или «готово 1: моя заметка», «готово все»). Отработанные: «отработанные». Чтобы научить ответу — нажмите вопрос ниже, допишите ответ после «=».",
+          chips: IDEAS.slice(0, 6).filter(d => d.data().q).map(d => ({ t: "✏️ " + d.data().q.slice(0, 32), fill: "запомни: " + d.data().q + " = " })) });
+        for (const d of IDEAS) if (d.data().status !== "seen") d.ref.update({ status: "seen", seenTs: Date.now() }).catch(() => {}); }
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
       busy = false; draw(); return true; }
-    if (/^очист\S*\s+предложени/.test(n)) { BOT.push({ me: true, text: q });
+    const mi = /^(готово|сделано|отработал\S*)\s+(все|\d+)\s*[:=\-]?\s*([\s\S]*)$/i.exec(q.trim());
+    if (mi) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
-      try { const s = await db.collection("botIdeas").limit(200).get(); for (const d of s.docs) await d.ref.delete(); BOT.push({ me: false, text: "🗑 Убрал предложений: " + s.size }); }
+      if (!IDEAS.length) { BOT.push({ me: false, text: "Сначала напишите «предложения» — я покажу список, потом отмечайте номер." }); draw(); return true; }
+      const pick = /^все$/i.test(mi[2]) ? IDEAS : IDEAS.filter((d, i) => i + 1 === +mi[2]);
+      if (!pick.length) { BOT.push({ me: false, text: "Такого номера нет в списке." }); draw(); return true; }
+      try { for (const d of pick) await d.ref.update({ status: "done", doneTs: Date.now(), note: (mi[3] || "").trim().slice(0, 500) });
+        IDEAS = IDEAS.filter(d => !pick.includes(d)); BOT.push({ me: false, text: "✅ Отработано: " + pick.length + ". Осталось в списке: " + IDEAS.length + ". Посмотреть отработанные: «отработанные»." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      draw(); return true; }
+    if (/^очист\S*\s+(предложени|отработан)/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { const onlyDone = /отработан/.test(n); const s = await db.collection("botIdeas").limit(300).get(); const del = s.docs.filter(d => !onlyDone || d.data().status === "done");
+        for (const d of del) await d.ref.delete(); IDEAS = []; BOT.push({ me: false, text: "🗑 Убрал: " + del.length }); }
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
       draw(); return true; }
     if (/^(напоминани|что\s+мне\s+напомнить|мои\s+напоминани)/.test(n)) { BOT.push({ me: true, text: q });
@@ -1740,7 +1761,8 @@ function buildBot(m) {
   }
   btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
   draw(); inp.focus();
-  if (isDev()) { db.collection("botIdeas").limit(50).get().then(s => { if (!s.empty) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + s.size + ". Напишите «предложения», чтобы посмотреть." }); draw(); } }).catch(() => {}); }
+  if (isDev()) { for (let i = BOT.length - 1; i >= 0; i--) if (/^💡 Новых предложений/.test(BOT[i].text || "")) BOT.splice(i, 1);
+    ideasList(false).then(ds => { const nw = ds.filter(d => d.data().status !== "seen").length; if (nw) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + nw + ". Напишите «предложения», чтобы посмотреть." }); } draw(); }).catch(() => {}); }
   // разработчику — напоминание о ближайших сроках (не чаще раза в сутки по каждому)
   if (isDev()) { const today = new Date().toDateString(); let add = false;
     DEV_REMINDERS.forEach(r => { if (remLeft(r) <= r.warn) { const k = "vmsrem_" + r.date; let seen = ""; try { seen = localStorage.getItem(k) || ""; } catch (e) {}
