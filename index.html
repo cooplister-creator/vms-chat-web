@@ -505,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 36";
+const WEB_VERSION = "30.10.2026 · сборка 37";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1578,14 +1578,24 @@ function buildBot(m) {
       if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
       await loadFaq(); BOT.push({ me: false, text: FAQ.length ? "Чему вы меня научили (" + FAQ.length + "):\n" + FAQ.slice(0, 40).map((f, i) => (i + 1) + ". «" + f.q + "» → " + String(f.a).slice(0, 80)).join("\n") + "\n\nЗабыть: «забудь: вопрос»." : "Пока ничему. Научить: «запомни: вопрос = ответ»." });
       draw(); return true; }
+    m = /^(очист\S*\s+журнал|убер\S*\s+вопрос[:\s]+([\s\S]+))/.exec(n);
+    if (m) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      busy = true; draw();
+      try { const sn = await db.collection("botLog").limit(500).get(), key = m[2] ? toks(m[2]).join(" ") : null;
+        const del = sn.docs.filter(d => key === null || toks(d.data().q || "").join(" ") === key);
+        for (const d of del) await d.ref.delete();
+        BOT.push({ me: false, text: del.length ? "🗑 Убрал записей из журнала: " + del.length : "Такого вопроса в журнале нет." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      busy = false; draw(); return true; }
     if (/^(что\s+не\s+нашлось|вопросы\s+без\s+ответа|без\s+ответа|что\s+я\s+не\s+понял)/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
       busy = true; draw();
       try {
-        const s = await db.collection("botLog").orderBy("ts", "desc").limit(300).get(), g = {};
-        s.docs.forEach(d => { const x = d.data(); if (!x.miss && x.ok !== false) return; const k = toks(x.q || "").join(" "); if (!k) return; (g[k] = g[k] || { q: x.q, n: 0, bad: 0, who: new Set() }); g[k].n++; if (!x.miss) g[k].bad++; g[k].who.add(x.name || "?"); });
+        await loadFaq(); const s = await db.collection("botLog").orderBy("ts", "desc").limit(300).get(), g = {};
+        s.docs.forEach(d => { const x = d.data(); if (!x.miss && x.ok !== false) return; if (faqFind(x.q || "")) return; const k = toks(x.q || "").join(" "); if (!k) return; (g[k] = g[k] || { q: x.q, n: 0, bad: 0, who: new Set() }); g[k].n++; if (!x.miss) g[k].bad++; g[k].who.add(x.name || "?"); });
         const top = Object.values(g).sort((a, b) => b.n - a.n).slice(0, 10);
-        BOT.push(top.length ? { me: false, text: "Вопросы, на которые я не ответил (за последнее время):\n" + top.map((t, i) => (i + 1) + ". «" + t.q + "» — " + t.n + " раз" + (t.bad ? " (👎 " + t.bad + ")" : "")).join("\n") + "\n\nНажмите вопрос ниже, допишите ответ после «=» и отправьте — я запомню.", chips: top.slice(0, 6).map(t => ({ t: "✏️ " + t.q.slice(0, 32), fill: "запомни: " + t.q + " = " })) } : { me: false, text: "Неотвеченных вопросов пока нет 👍" });
+        BOT.push(top.length ? { me: false, text: "Вопросы, на которые я не ответил (за последнее время):\n" + top.map((t, i) => (i + 1) + ". «" + t.q + "» — " + t.n + " раз" + (t.bad ? " (👎 " + t.bad + ")" : "")).join("\n") + "\n\nНажмите вопрос ниже, допишите ответ после «=» и отправьте — я запомню. Убрать вопрос: «убери вопрос: текст», очистить всё: «очисти журнал».", chips: top.slice(0, 6).map(t => ({ t: "✏️ " + t.q.slice(0, 32), fill: "запомни: " + t.q + " = " })) } : { me: false, text: "Неотвеченных вопросов пока нет 👍" });
       } catch (e) { BOT.push({ me: false, text: "Не получилось прочитать журнал: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
       busy = false; draw(); return true; }
     return false;
