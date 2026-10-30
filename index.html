@@ -505,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 34";
+const WEB_VERSION = "30.10.2026 · сборка 35";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1041,6 +1041,13 @@ function freightBlock(draw) {
   const ofPod = ofPol.filter(r => r[2] === calc.fpod);
   const cities = [...new Set(ofPod.map(r => r[3]))].sort((a, b) => { if (a === FR_PORT) return -1; if (b === FR_PORT) return 1; const ia = MAIN_CITIES.indexOf(a), ib = MAIN_CITIES.indexOf(b); return (ia < 0) - (ib < 0) || (ia >= 0 ? ia - ib : a.localeCompare(b, "ru")); });
   if (!cities.includes(calc.fcity)) calc.fcity = cities[0];
+  // связка с ЖД: выбрали ДРОП до города и размер контейнера во фрахте — в блоке ЖД ставятся тот же город и тот же размер
+  const sk = calc.fcity + "|" + calc.fsize;
+  if (calc._sk !== undefined && calc._sk !== sk) {
+    if (calc.fcity !== FR_PORT && RATES.some(r => r.city === calc.fcity)) calc.city = calc.fcity;
+    calc.type = calc.fsize ? 2 : (calc.type === 2 ? 0 : calc.type);
+  }
+  calc._sk = sk;
   const top = ports.slice(0, 8); if (!top.includes(calc.fpol)) top.push(calc.fpol);
   d.append(h("div", { class: "cityrow" }, ...top.map(p => h("button", { class: "chip" + (p === calc.fpol ? " on" : ""), onclick: () => { calc.fpol = p; draw(); } }, p.split(" · ")[0]))));
   d.append(h("div", { class: "ctl2" },
