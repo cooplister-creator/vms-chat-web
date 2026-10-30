@@ -429,7 +429,7 @@ async function loadRates() {
   const b = $(".rbtn"); if (b) b.textContent = "…";
   try {
     const j = await (await fetch("https://www.cbr-xml-daily.ru/daily_json.js")).json();
-    RT = { usd: j.Valute.USD, eur: j.Valute.EUR, date: (j.Date || "").slice(8, 10) + "." + (j.Date || "").slice(5, 7), upd: Date.now(), failed: false };
+    RT = { usd: j.Valute.USD, eur: j.Valute.EUR, cny: j.Valute.CNY, date: (j.Date || "").slice(8, 10) + "." + (j.Date || "").slice(5, 7), upd: Date.now(), failed: false };
     localStorage.setItem("rt", JSON.stringify(RT));
   } catch (e) { RT = RT ? { ...RT, failed: true } : { failed: true }; }
   paintRates();
@@ -441,12 +441,13 @@ function paintRates() {
   const chip = (s, v) => {
     const p = h("span", { class: "pill" }, h("b", {}, s));
     if (!v) { p.append("—"); return p; }
-    p.append(v.Value.toFixed(2).replace(".", ","));
-    const d = v.Value - v.Previous;
+    const nm = v.Nominal || 1, val = v.Value / nm;
+    p.append(val.toFixed(2).replace(".", ","));
+    const d = val - v.Previous / nm;
     if (Math.abs(d) > 0.0005) p.append(h("span", { class: d > 0 ? "up" : "dn" }, d > 0 ? " ▲" : " ▼"));
     return p;
   };
-  box.append(chip("$", RT && RT.usd), chip("€", RT && RT.eur), h("button", { class: "rbtn", title: "Обновить курс", onclick: loadRates }, "⟳"));
+  box.append(chip("$", RT && RT.usd), chip("€", RT && RT.eur), chip("¥", RT && RT.cny), h("button", { class: "rbtn", title: "Обновить курс", onclick: loadRates }, "⟳"));
   const d = RT && RT.upd ? new Date(RT.upd) : null;
   info.textContent = "ЦБ" + (RT && RT.date ? " на " + RT.date : "") + " · обн. " + (d ? pad(d.getDate()) + "." + pad(d.getMonth() + 1) + " " + fmtTime(RT.upd) : "—") + (RT && RT.failed ? " · нет связи" : "");
 }
@@ -493,7 +494,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "29.10.2026 · сборка 23";
+const WEB_VERSION = "30.10.2026 · сборка 24";
 (function updateWatch() {
   let shown = false;
   async function check() {
