@@ -508,7 +508,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 48";
+const WEB_VERSION = "30.10.2026 · сборка 49";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1528,7 +1528,7 @@ function buildBot(m) {
         const today = new Date(new Date().toDateString());
         const exp = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u < today; }).sort((a, b) => parseUntil(b.until) - parseUntil(a.until));
         const shown = exp.slice(0, 40);
-        BOT.push(exp.length ? { me: false, text: "Срок окончен у " + exp.length + " доверенностей. Скачайте список в Excel 👇", xlsx: exp, xname: "Доверенности_просроченные_" + today.getFullYear() + "-" + pad(today.getMonth() + 1) + "-" + pad(today.getDate()) + ".xlsx" } : { me: false, text: "✅ Просроченных доверенностей нет." });
+        BOT.push(exp.length ? { me: false, text: "Срок окончен у " + exp.length + (exp.length % 10 === 1 && exp.length % 100 !== 11 ? " доверенности" : " доверенностей") + ". Скачайте список в Excel 👇", xlsx: exp, xname: "Доверенности_просроченные_" + today.getFullYear() + "-" + pad(today.getMonth() + 1) + "-" + pad(today.getDate()) + ".xlsx" } : { me: false, text: "✅ Просроченных доверенностей нет." });
       } else if (/заканчива|истека|скоро|ближайш/.test(norm(q))) {
         const today = new Date(new Date().toDateString()), lim = today.getTime() + 30 * 864e5;
         const soon = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u >= today && u.getTime() <= lim; }).sort((a, b) => parseUntil(a.until) - parseUntil(b.until));
