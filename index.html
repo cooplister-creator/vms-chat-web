@@ -518,7 +518,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "30.10.2026 · сборка 52";
+const WEB_VERSION = "30.10.2026 · сборка 54";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1508,7 +1508,7 @@ function buildBot(m) {
         busy = false; draw(); return; }
     }
     if (/(что|чего)\s+(ты\s+)?(умеешь|можешь|могу)|твои\s+функц|^(помощь|справка|команды|help)$|что\s+(у\s+тебя\s+)?есть|как\s+(тобой\s+)?пользоваться/.test(norm(q).trim())) {
-      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Доверенности и документы — напишите, например: «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n⏳ Сроки — «просроченные доверенности», «что истекает скоро».\n📊 Excel — «выгрузи в экселе просроченные доверенности» или «все доверенности».\n🚆 Ставки ЖД — действующие ставки считаются в калькуляторе автоматически.\n🧠 Понимаю уточнения: после «кфк ВМТП» можно написать «а вмкт?» или «когда истекает?». Под ответом — 👍/👎: так я учусь.\n📁 Инструкции и документы по портам — «документы по порту ВМТП», «дай инструкцию Соллерс»: покажу список, можно открыть или скачать." + (isAdmin ? "" + (isDev() ? "\n\nТолько для разработчика:\n🎓 «запомни: вопрос = ответ» — научить меня, «что не нашлось» — вопросы без ответа, «чему ты научился», «забудь: вопрос»." : "") + "\n\nТолько для администраторов:\n➕ Перетащите файл в чат или прикрепите через 📎 (можно несколько сразу) — сам определю: доверенность добавлю в реестр, ставки разберу и покажу, что изменится, останется нажать «Применить», остальное разложу по нужным папкам (порты, бухгалтерия, договоры). Напишите заранее, например: «инструкция к порту ВМТП» — и прикрепите файл.\n🗑 «Удали доверенность …» — уберу из реестра (файл можно будет восстановить в течение 30 дней).\n📈 Ставки: понимаю файлы ФРЕШ ТЕРМИНАЛ, ТРАНС СИНЕРГИЯ, ЮНИОН, АТК. Старые ставки действуют до даты окончания." : "") }); draw(); return;
+      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Документы — «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n📁 Инструкции по портам — «документы по порту ВМТП», «дай инструкцию Соллерс».\n⏳ Сроки — «что истекает скоро», «просроченные доверенности».\n📊 Excel — «выгрузи в экселе все доверенности».\n💱 Курсы — «курс доллара», «юань на бирже».\n📚 Словарь — «что такое ТН ВЭД», «инкотермс», «демередж», «СВХ».\n🧠 Уточнения — после ответа можно спросить коротко: «а срок?», «а вмкт?».\n👍/👎 под ответом — так я учусь." + (isAdmin ? "\n\nТолько для администраторов:\n➕ Прикрепите файл через 📎 (можно несколько сразу) — сам определю, что это (доверенность, ставки ЖД, фрахт), покажу, что изменится, останется нажать «Применить».\n🗑 «Удали доверенность …» — уберу из реестра (файл можно восстановить в течение 30 дней).\n📈 Ставки ЖД и морской фрахт загружаются файлами; старые ставки действуют до даты окончания." + (isDev() ? "\n\nТолько для разработчика:\n🎓 «запомни: вопрос = ответ», «что не нашлось», «чему ты научился», «забудь: вопрос», «напоминания»." : "") : "") }); draw(); return;
     }
     if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
       BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется. Можно просто перетащить файл в чат или прикрепить через 📎 — сам пойму, что это.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
@@ -1571,7 +1571,23 @@ function buildBot(m) {
   }
   /* ---------- «ум» помощника: память разговора, обучение, подсказки ---------- */
   const botLog = o => { try { db.collection("botLog").add(Object.assign({ uid: me.uid, name: myName || "", ts: Date.now() }, o)).catch(() => {}); } catch (e) {} };
-  function rateAns(b, ok) { b.fbDone = ok ? "👍 Спасибо!" : "👎 Записал — разработчик посмотрит и научит меня."; botLog({ q: b.q || "", ok, miss: false, a: String(b.text || "").slice(0, 200) }); draw(); }
+  function ideaDialog(b) {
+    const ta = h("textarea", { style: "width:100%;min-height:90px;box-sizing:border-box;padding:8px;border-radius:10px;border:1px solid #ccc;font:inherit", placeholder: "Например: на этот вопрос нужно отвечать так…" });
+    let close;
+    const send = async () => {
+      const t = ta.value.trim(); if (!t) { close(); return; }
+      const k = "vmsidea_" + new Date().toDateString(); let c = 0; try { c = +localStorage.getItem(k) || 0; } catch (e) {}
+      if (c >= 5) { toast("Сегодня уже много предложений — попробуйте завтра"); close(); return; }
+      try { await db.collection("botIdeas").add({ uid: me.uid, name: myName || "", ts: Date.now(), q: String(b.q || "").slice(0, 300), a: String(b.text || "").slice(0, 300), idea: t.slice(0, 1000) });
+        try { localStorage.setItem(k, String(c + 1)); } catch (e) {} toast("Спасибо! Предложение передано разработчику"); }
+      catch (e) { toast("Не удалось отправить"); }
+      close();
+    };
+    close = modal(h("div", {}, h("h3", {}, "Что не так с ответом?"), h("div", { style: "font-size:13px;opacity:.7;margin-bottom:8px" }, "Напишите, как должен отвечать помощник или что добавить. Предложение получит разработчик."), ta,
+      h("div", { style: "display:flex;gap:8px;justify-content:flex-end;margin-top:10px" }, h("button", { class: "btn ghost", onclick: () => close() }, "Пропустить"), h("button", { class: "btn", onclick: send }, "Отправить"))));
+    ta.focus();
+  }
+  function rateAns(b, ok) { b.fbDone = ok ? "👍 Спасибо!" : "👎 Записал — разработчик посмотрит и научит меня."; botLog({ q: b.q || "", ok, miss: false, a: String(b.text || "").slice(0, 200) }); draw(); if (!ok) ideaDialog(b); }
   // встроенные ответы (их нельзя удалить командой «забудь»; свои ответы добавляются через «запомни»)
   const SEED = [
     [["что такое дроп", "что значит дроп", "дроп это что", "что значит ДРОП до города"], "ДРОП — довоз контейнера от порта (Владивосток/Восточный) до выбранного города. Во фрахте выберите «ДРОП до города» — цена показывается с учётом довоза. «Только порт» — без довоза."],
@@ -1635,6 +1651,19 @@ function buildBot(m) {
   const remText = r => { const d = remLeft(r); return "⏰ " + r.date.split("-").reverse().join(".") + " — " + (d > 0 ? "через " + d + " дн" : d === 0 ? "сегодня" : "срок прошёл " + (-d) + " дн назад") + ".\n" + r.text; };
   async function adminCmd(q) {
     const n = norm(q).trim();
+    if (/^(предложени|идеи|что\s+предлагают)/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
+      busy = true; draw();
+      try { const s = await db.collection("botIdeas").orderBy("ts", "desc").limit(20).get();
+        BOT.push(s.empty ? { me: false, text: "Предложений пока нет." } : { me: false, text: "💡 Предложения (" + s.size + "):\n\n" + s.docs.map((d, i) => { const x = d.data(); return (i + 1) + ". " + (x.name || "?") + ", " + new Date(x.ts).toLocaleDateString("ru-RU") + "\nВопрос: «" + (x.q || "") + "»\nПредложение: " + (x.idea || ""); }).join("\n\n") + "\n\nНажмите на вопрос ниже, допишите ответ после «=» и отправьте — я запомню. Убрать все: «очисти предложения».",
+          chips: s.docs.slice(0, 6).filter(d => d.data().q).map(d => ({ t: "✏️ " + d.data().q.slice(0, 32), fill: "запомни: " + d.data().q + " = " })) }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      busy = false; draw(); return true; }
+    if (/^очист\S*\s+предложени/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { const s = await db.collection("botIdeas").limit(200).get(); for (const d of s.docs) await d.ref.delete(); BOT.push({ me: false, text: "🗑 Убрал предложений: " + s.size }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
     if (/^(напоминани|что\s+мне\s+напомнить|мои\s+напоминани)/.test(n)) { BOT.push({ me: true, text: q });
       BOT.push({ me: false, text: !isDev() ? "Это видит только разработчик." : DEV_REMINDERS.length ? DEV_REMINDERS.map(remText).join("\n\n") : "Напоминаний нет." }); draw(); return true; }
     if (/^(очист\S*|сотри|удали)\s+(чат|историю|переписку|диалог)/.test(n)) { BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} draw(); return true; }
@@ -1711,6 +1740,7 @@ function buildBot(m) {
   }
   btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
   draw(); inp.focus();
+  if (isDev()) { db.collection("botIdeas").limit(50).get().then(s => { if (!s.empty) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + s.size + ". Напишите «предложения», чтобы посмотреть." }); draw(); } }).catch(() => {}); }
   // разработчику — напоминание о ближайших сроках (не чаще раза в сутки по каждому)
   if (isDev()) { const today = new Date().toDateString(); let add = false;
     DEV_REMINDERS.forEach(r => { if (remLeft(r) <= r.warn) { const k = "vmsrem_" + r.date; let seen = ""; try { seen = localStorage.getItem(k) || ""; } catch (e) {}
