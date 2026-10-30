@@ -505,7 +505,7 @@ function assignDialog(u) {
     } }, "🗑 Удалить из чата") : null,
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
-const WEB_VERSION = "30.10.2026 · сборка 35";
+const WEB_VERSION = "30.10.2026 · сборка 36";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1328,6 +1328,11 @@ function buildBot(m) {
           h("div", { class: "st", style: "color:" + st[1] }, st[0]),
           h("button", { class: "btn", onclick: () => get(d, false) }, "Открыть"), " ", h("button", { class: "btn ghost", onclick: () => get(d, true) }, "Скачать"),
           b.del ? h("button", { class: "btn ghost", style: "margin-left:6px;color:#c62828", onclick: () => delDoc(d) }, "🗑 Удалить") : null)); });
+      if (b.chips && b === BOT[BOT.length - 1]) log.append(h("div", { style: "display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 8px" }, ...b.chips.map(c => { const o = typeof c === "string" ? { t: c } : c;
+        return h("button", { class: "btn ghost", style: "font-size:12px;padding:5px 10px", onclick: () => { if (o.fill) { inp.value = o.fill; inp.focus(); } else ask(o.send || o.t); } }, o.t); })));
+      if (b.fb) log.append(h("div", { style: "font-size:12px;margin:0 0 8px;opacity:.85" }, b.fbDone ? b.fbDone : h("span", {}, "Ответ помог? ",
+        h("button", { class: "btn ghost", style: "font-size:12px;padding:2px 8px", onclick: () => rateAns(b, true) }, "👍"), " ",
+        h("button", { class: "btn ghost", style: "font-size:12px;padding:2px 8px", onclick: () => rateAns(b, false) }, "👎"))));
     });
     if (busy) {
       if (!busyAt) busyAt = Date.now();
@@ -1452,8 +1457,8 @@ function buildBot(m) {
       }
     } catch (e) { if (w) w.close(); toast(e.message || "Ошибка"); }
   }
-  async function ask(qq) {
-    const q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; BOT.push({ me: true, text: q });
+  async function ask0(q) {
+    if (!q || busy) return; BOT.push({ me: true, text: q });
     { const n = q.toLowerCase().replace(/ё/g, "е");
       if ((n.includes("кфк") || n.includes("скк")) && !["вмтп", "вмкт", "вмрп", "пасифик", "pacific", "вмпп", "соллерс", "находк"].some(k => n.includes(k))) {
         BOT.push({ me: false, text: "Уточните порт:", choices: ["ВМТП", "ВМКТ (ВМРП)", "Пасифик Лоджистик (Соллерс)", "ВМПП", "Находка"], kind: n.includes("скк") ? "скк" : "кфк" }); draw(); return; } }
@@ -1476,7 +1481,7 @@ function buildBot(m) {
         busy = false; draw(); return; }
     }
     if (/(что|чего)\s+(ты\s+)?(умеешь|можешь|могу)|твои\s+функц|^(помощь|справка|команды|help)$|что\s+(у\s+тебя\s+)?есть|как\s+(тобой\s+)?пользоваться/.test(norm(q).trim())) {
-      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Доверенности и документы — напишите, например: «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n⏳ Сроки — «просроченные доверенности», «что истекает скоро».\n📊 Excel — «выгрузи в экселе просроченные доверенности» или «все доверенности».\n🚆 Ставки ЖД — действующие ставки считаются в калькуляторе автоматически.\n📁 Инструкции и документы по портам — «документы по порту ВМТП», «дай инструкцию Соллерс»: покажу список, можно открыть или скачать." + (isAdmin ? "\n\nТолько для администраторов:\n➕ Перетащите файл в чат или прикрепите через 📎 (можно несколько сразу) — сам определю: доверенность добавлю в реестр, ставки разберу и покажу, что изменится, останется нажать «Применить», остальное разложу по папкам на Диске (порты, бухгалтерия, договоры). Напишите заранее, например: «инструкция к порту ВМТП» — и прикрепите файл.\n🗑 «Удали доверенность …» — уберу из реестра (файл останется в корзине Диска 30 дней).\n📈 Ставки: понимаю файлы ФРЕШ ТЕРМИНАЛ, ТРАНС СИНЕРГИЯ, ЮНИОН, АТК. Старые ставки действуют до даты окончания." : "") }); draw(); return;
+      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Доверенности и документы — напишите, например: «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n⏳ Сроки — «просроченные доверенности», «что истекает скоро».\n📊 Excel — «выгрузи в экселе просроченные доверенности» или «все доверенности».\n🚆 Ставки ЖД — действующие ставки считаются в калькуляторе автоматически.\n🧠 Понимаю уточнения: после «кфк ВМТП» можно написать «а вмкт?» или «когда истекает?». Под ответом — 👍/👎: так я учусь.\n📁 Инструкции и документы по портам — «документы по порту ВМТП», «дай инструкцию Соллерс»: покажу список, можно открыть или скачать." + (isAdmin ? "\n\nТолько для разработчика:\n🎓 «запомни: вопрос = ответ» — научить меня, «что не нашлось» — вопросы без ответа, «чему ты научился», «забудь: вопрос».\n\nТолько для администраторов:\n➕ Перетащите файл в чат или прикрепите через 📎 (можно несколько сразу) — сам определю: доверенность добавлю в реестр, ставки разберу и покажу, что изменится, останется нажать «Применить», остальное разложу по папкам на Диске (порты, бухгалтерия, договоры). Напишите заранее, например: «инструкция к порту ВМТП» — и прикрепите файл.\n🗑 «Удали доверенность …» — уберу из реестра (файл останется в корзине Диска 30 дней).\n📈 Ставки: понимаю файлы ФРЕШ ТЕРМИНАЛ, ТРАНС СИНЕРГИЯ, ЮНИОН, АТК. Старые ставки действуют до даты окончания." : "") }); draw(); return;
     }
     if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
       BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется. Можно просто перетащить файл в чат или прикрепить через 📎 — сам пойму, что это.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
@@ -1537,8 +1542,91 @@ function buildBot(m) {
     } catch (e) { DOCS = null; BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
     busy = false; draw();
   }
+  /* ---------- «ум» помощника: память разговора, обучение, подсказки ---------- */
+  const botLog = o => { try { db.collection("botLog").add(Object.assign({ uid: me.uid, name: myName || "", ts: Date.now() }, o)).catch(() => {}); } catch (e) {} };
+  function rateAns(b, ok) { b.fbDone = ok ? "👍 Спасибо!" : "👎 Записал — разработчик посмотрит и научит меня."; botLog({ q: b.q || "", ok, miss: false, a: String(b.text || "").slice(0, 200) }); draw(); }
+  let FAQ = null;
+  async function loadFaq() { if (FAQ) return FAQ; try { const s = await db.collection("botFaq").get(); FAQ = s.docs.map(d => Object.assign({ id: d.id }, d.data())); } catch (e) { FAQ = []; } return FAQ; }
+  const toks = t => norm(t).split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 2 && !STOP.has(w)).map(stem);
+  function faqFind(q) {
+    const qt = toks(q); if (!qt.length || !FAQ) return null; let best = null, bs = 0;
+    FAQ.forEach(f => { const ft = toks(f.q || ""); if (!ft.length) return; const hit = ft.filter(w => qt.includes(w)).length, a = hit / ft.length, bq = hit / qt.length; const sc = Math.min(a, bq + 0.2); if (a >= 0.8 && bq >= 0.6 && sc > bs) { bs = sc; best = f; } });
+    return best;
+  }
+  const ctx = { type: "", docs: [], q: "" };
+  const NOHIT = /^(Ничего не нашёл|Уточните, какой|Такую доверенность не нашёл|По этому запросу до)/;
+  const HELP_CHIPS = ["Что ты умеешь", "Просроченные доверенности", "Что истекает скоро"];
+  const isDev = () => !!(USERS[me.uid] && USERS[me.uid].owner);
+  async function adminCmd(q) {
+    const n = norm(q).trim();
+    let m = /^запомни[:\s]+([\s\S]+?)\s*=\s*([\s\S]+)$/.exec(q.trim().replace(/^Запомни/, "запомни"));
+    if (m) { BOT.push({ me: true, text: q });
+      if (!isDev()) BOT.push({ me: false, text: "Учить меня может только разработчик." });
+      else try { await db.collection("botFaq").add({ q: m[1].trim().slice(0, 300), a: m[2].trim().slice(0, 1500), by: myName || "", ts: Date.now() }); FAQ = null; await loadFaq();
+        BOT.push({ me: false, text: "✅ Запомнил. Теперь на вопрос «" + m[1].trim() + "» отвечу так же, как вы написали." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось сохранить: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      draw(); return true; }
+    m = /^забудь[:\s]+([\s\S]+)$/.exec(n);
+    if (m) { BOT.push({ me: true, text: q });
+      if (!isDev()) BOT.push({ me: false, text: "Это может только разработчик." });
+      else try { await loadFaq(); const key = toks(m[1]).join(" "), del = FAQ.filter(f => toks(f.q).join(" ") === key);
+        for (const f of del) await db.collection("botFaq").doc(f.id).delete(); FAQ = null; await loadFaq();
+        BOT.push({ me: false, text: del.length ? "🗑 Забыл: " + del.length + " шт." : "Такого ответа у меня нет. Список — «чему ты научился»." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
+    if (/^(чему\s+(ты\s+)?научил|что\s+ты\s+запомнил|список\s+запомненного)/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
+      await loadFaq(); BOT.push({ me: false, text: FAQ.length ? "Чему вы меня научили (" + FAQ.length + "):\n" + FAQ.slice(0, 40).map((f, i) => (i + 1) + ". «" + f.q + "» → " + String(f.a).slice(0, 80)).join("\n") + "\n\nЗабыть: «забудь: вопрос»." : "Пока ничему. Научить: «запомни: вопрос = ответ»." });
+      draw(); return true; }
+    if (/^(что\s+не\s+нашлось|вопросы\s+без\s+ответа|без\s+ответа|что\s+я\s+не\s+понял)/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
+      busy = true; draw();
+      try {
+        const s = await db.collection("botLog").orderBy("ts", "desc").limit(300).get(), g = {};
+        s.docs.forEach(d => { const x = d.data(); if (!x.miss && x.ok !== false) return; const k = toks(x.q || "").join(" "); if (!k) return; (g[k] = g[k] || { q: x.q, n: 0, bad: 0, who: new Set() }); g[k].n++; if (!x.miss) g[k].bad++; g[k].who.add(x.name || "?"); });
+        const top = Object.values(g).sort((a, b) => b.n - a.n).slice(0, 10);
+        BOT.push(top.length ? { me: false, text: "Вопросы, на которые я не ответил (за последнее время):\n" + top.map((t, i) => (i + 1) + ". «" + t.q + "» — " + t.n + " раз" + (t.bad ? " (👎 " + t.bad + ")" : "")).join("\n") + "\n\nНажмите вопрос ниже, допишите ответ после «=» и отправьте — я запомню.", chips: top.slice(0, 6).map(t => ({ t: "✏️ " + t.q.slice(0, 32), fill: "запомни: " + t.q + " = " })) } : { me: false, text: "Неотвеченных вопросов пока нет 👍" });
+      } catch (e) { BOT.push({ me: false, text: "Не получилось прочитать журнал: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      busy = false; draw(); return true; }
+    return false;
+  }
+  function followUp(q) {
+    const n = norm(q).replace(/[?!.]+$/g, "").trim();
+    if (ctx.docs.length && /^(а\s+)?(когда|до какого|какой срок|срок|до скольки|сроки)(\s+(истекает|заканчивается|действует|действия|у\s+(него|нее|неё|них)))*$/.test(n)) return { reply: { me: false, text: "Сроки:\n" + ctx.docs.slice(0, 15).map(d => "• " + (d.org || d.name) + " — " + statusLine(d)[0]).join("\n"), q } };
+    if (ctx.docs.length && /^(пришли|скинь|дай|открой|покажи|скачай)(\s+(его|ее|её|этот|эту|их|файл|сам файл|файлы))?$/.test(n)) return { reply: { me: false, text: "Вот:", docs: ctx.docs.slice(0, 10), q } };
+    const m = /^а\s+(.+)$/.exec(n);
+    if (m && ctx.type && !/(как|что|кто|почему|зачем|сколько)/.test(m[1].split(" ")[0])) return { q: ctx.type + " " + m[1] };
+    return {};
+  }
+  async function ask(qq) {
+    let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = "";
+    if (await adminCmd(q)) return;
+    const f = followUp(q);
+    if (f.reply) { BOT.push({ me: true, text: q }); f.reply.fb = true; BOT.push(f.reply); draw(); return; }
+    if (f.q) q = f.q;
+    await loadFaq(); const hit = faqFind(q);
+    if (hit) { BOT.push({ me: true, text: q }); BOT.push({ me: false, text: "💡 " + hit.a, fb: true, q }); draw(); return; }
+    const n0 = BOT.length;
+    await ask0(q);
+    const fresh = BOT.slice(n0 + 1).filter(b => !b.me); if (!fresh.length) return;
+    const last = fresh[fresh.length - 1], withDocs = fresh.filter(b => b.docs && b.docs.length).pop();
+    const nq = norm(q);
+    if (withDocs) { ctx.docs = withDocs.docs; ctx.q = q; ctx.type = /кфк/.test(nq) ? "кфк" : /скк/.test(nq) ? "скк" : /довер/.test(nq) ? "доверенность" : /порт/.test(nq) ? "документы по порту" : ""; }
+    if (NOHIT.test(last.text || "")) { botLog({ q, miss: true }); last.chips = HELP_CHIPS; }
+    else if (withDocs && withDocs.docs.some(d => d.kind === "poa")) last.chips = ["📅 Когда истекает?", "Что истекает скоро", "Выгрузи в экселе просроченные доверенности"];
+    else if (/^Заканчиваются в течение/.test(last.text || "")) last.chips = ["Выгрузи в экселе что истекает скоро", "Просроченные доверенности"];
+    else if (/^Срок окончен/.test(last.text || "")) last.chips = ["Что истекает скоро"];
+    if (!last.xlsx && !last.apply && !last.upload) { last.fb = true; last.q = q; }
+    draw();
+  }
   btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
   draw(); inp.focus();
+  if (!window.BOT_GREETED) { window.BOT_GREETED = true;
+    (async () => { try { const j = DOCS ? { docs: DOCS } : await docsCall("action=list"); DOCS = j.docs;
+      const today = new Date(new Date().toDateString()), poa = DOCS.filter(d => d.kind === "poa"), U = d => parseUntil(d.until);
+      const exp = poa.filter(d => U(d) && U(d) < today).length, soon = poa.filter(d => U(d) && U(d) >= today && U(d).getTime() <= today.getTime() + 14 * 864e5);
+      if (exp || soon.length) { BOT.push({ me: false, text: "👋 Кстати: " + (soon.length ? "в ближайшие 14 дней заканчиваются доверенности — " + soon.length + " шт." : "срочных доверенностей на 14 дней нет") + (exp ? "; уже просрочено — " + exp + "." : "."), chips: (soon.length ? ["Что истекает скоро"] : []).concat(exp ? ["Просроченные доверенности"] : []) }); draw(); }
+    } catch (e) {} })(); }
 }
 </script>
 </body>
