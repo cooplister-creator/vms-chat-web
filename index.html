@@ -309,6 +309,13 @@ function roomTitle(r) {
 const other = r => r.type === "direct" ? USERS[r.members.find(x => x !== me.uid)] : null;
 
 /* ---------- вход ---------- */
+const POLICY_TEXT = "Политика конфиденциальности сервиса «Рабочий чат»\nРедакция от 31.10.2026\n\n1. Кто обрабатывает данные\nОператор персональных данных: Литвиненко Евгений Петрович (физическое лицо).\nСвязь по вопросам данных: teamchat.privacy125@yandex.ru\n\n2. Какие данные мы обрабатываем\n• Имя и адрес электронной почты, указанные при регистрации.\n• Отдел, должность и офис, которые назначает администратор.\n• Сообщения, изображения и файлы, которые вы отправляете в чатах.\n• Документы, которые сотрудники загружают в разделах сервиса.\n• Служебные данные: время последнего посещения, технические записи о входе.\n\n3. Зачем мы их обрабатываем\n• Создание и защита вашей учётной записи, подтверждение личности по почте.\n• Работа чатов, личных переписок и разделов сервиса.\n• Разграничение доступа между сотрудниками и отделами.\n• Поддержка пользователей и безопасность сервиса.\n\n4. Основание\nОбработка выполняется с вашего согласия. Согласие даётся при регистрации (отметка «Я согласен на обработку персональных данных»). Вы можете отозвать его в любой момент, написав на адрес из пункта 1.\n\n5. Кто имеет доступ к данным\n• Другие пользователи видят ваше имя, отдел и сообщения в тех чатах, где вы участвуете.\n• Администраторы управляют доступом сотрудников и могут просматривать список пользователей.\n• Оператор имеет техническую возможность доступа к данным для обслуживания сервиса.\nМы не продаём данные и не передаём их третьим лицам в рекламных целях.\n\n6. Где хранятся данные\nДля хранения используются облачные сервисы Google (Firebase и Google Drive). Серверы этих сервисов могут находиться за пределами Российской Федерации. Давая согласие, вы соглашаетесь на такую обработку.\n\n7. Как долго мы храним данные\nДанные хранятся, пока вы пользуетесь сервисом. Если вас удалили из системы или вы отозвали согласие, данные вашего профиля удаляются. Сообщения в общих чатах могут сохраняться как часть переписки, если иное не будет согласовано по вашему запросу.\n\n8. Ваши права\nВы можете запросить сведения о ваших данных, потребовать их исправления или удаления, а также отозвать согласие. Для этого напишите на teamchat.privacy125@yandex.ru с адреса, указанного при регистрации. Мы ответим в сроки, установленные законом.\n\n9. Как мы защищаем данные\nДоступ к сервису только по подтверждённой почте из списка сотрудников и с одобрения администратора. Правила доступа ограничивают, кто что видит. Передача данных идёт по защищённому соединению (HTTPS).\n\n10. Утечки\nЕсли произойдёт утечка данных, мы уведомим об этом уполномоченные органы и пользователей в порядке, предусмотренном законом.\n\n11. Изменения политики\nМы можем обновлять эту политику. Новая редакция вступает в силу с момента публикации в сервисе, дата редакции указана вверху.";
+function showPolicy() {
+  let close;
+  close = modal(h("div", {}, h("h3", {}, "Политика конфиденциальности"),
+    h("div", { style: "max-height:60vh;overflow:auto;font-size:14px;line-height:1.5;white-space:pre-wrap;margin-bottom:12px" }, POLICY_TEXT),
+    h("button", { class: "btn full", onclick: () => close() }, "Закрыть")));
+}
 function showAuth() {
   unsubs.forEach(f => f()); unsubs = [];
   let reg = false;
@@ -320,22 +327,28 @@ function showAuth() {
   const sub = h("p", {}, "Войдите в аккаунт");
   const go = h("button", { class: "btn full" }, "Войти");
   const sw = h("button", { class: "link" }, "Нет аккаунта? Зарегистрироваться");
-  sw.onclick = () => { reg = !reg; name.classList.toggle("hidden", !reg); go.textContent = reg ? "Зарегистрироваться" : "Войти";
+  const agree = h("input", { type: "checkbox", style: "margin-top:3px" });
+  const agreeBox = h("label", { class: "hidden", style: "display:flex;gap:8px;align-items:flex-start;font-size:13px;text-align:left;margin:6px 0" }, agree,
+    h("span", {}, "Я согласен на обработку персональных данных и принимаю ", h("a", { href: "#", onclick: e => { e.preventDefault(); showPolicy(); } }, "политику конфиденциальности")));
+  const polLink = h("button", { class: "link", style: "font-size:12px", onclick: showPolicy }, "Политика конфиденциальности");
+  sw.onclick = () => { reg = !reg; name.classList.toggle("hidden", !reg); agreeBox.classList.toggle("hidden", !reg); go.textContent = reg ? "Зарегистрироваться" : "Войти";
     sub.textContent = reg ? "Создайте аккаунт" : "Войдите в аккаунт"; sw.textContent = reg ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"; };
   const submit = async () => {
     err.textContent = ""; go.disabled = true;
     try {
       if (reg) {
         if (!name.value.trim()) throw new Error("Введите имя");
+        if (!agree.checked) throw new Error("Подтвердите согласие на обработку персональных данных");
         const r = await auth.createUserWithEmailAndPassword(email.value.trim(), pass.value);
         await r.user.updateProfile({ displayName: name.value.trim() });
         try { await r.user.sendEmailVerification(); } catch (e) {}
+        try { localStorage.setItem("vmsconsent_" + r.user.uid, String(Date.now())); } catch (e) {}
       } else await auth.signInWithEmailAndPassword(email.value.trim(), pass.value);
     } catch (e) { err.textContent = authRu(e); }
     go.disabled = false;
   };
   go.onclick = submit; pass.onkeydown = e => { if (e.key === "Enter") submit(); };
-  app.append(h("div", { class: "auth" }, h("img", { src: LOGO }), h("h1", {}, "ВМС Групп Chat"), sub, name, email, pass, err, go, sw));
+  app.append(h("div", { class: "auth" }, h("img", { src: LOGO }), h("h1", {}, "ВМС Групп Chat"), sub, name, email, pass, agreeBox, err, go, sw, polLink));
 }
 function showPending() {
   const app = $("#app"); app.innerHTML = "";
@@ -380,7 +393,8 @@ async function enter(u) {
     else {
       // новый сотрудник: почта должна быть подтверждена и значиться в списке разрешённых
       if (!u.emailVerified) { showVerify(u); return; }
-      try { await ref.set({ name: myName, email: u.email || "", approved: false, lastSeen: 0 }); }
+      let cs = 0; try { cs = +localStorage.getItem("vmsconsent_" + u.uid) || 0; } catch (e) {}
+      try { await ref.set(Object.assign({ name: myName, email: u.email || "", approved: false, lastSeen: 0 }, cs ? { consentTs: cs } : {})); }
       catch (e) { showNotAllowed(u); return; }
     }
   } catch (e) { console.warn(e); }
@@ -541,6 +555,7 @@ function assignDialog(u) {
     h("button", { class: "btn gray full", onclick: () => close() }, "Отмена")));
 }
 function authRu(e) {
+  if (e && !e.code && /[А-Яа-яЁё]/.test(e.message || "")) return e.message;
   const c = (e && e.code || "").replace("auth/", "");
   const M = { "invalid-email": "Неверный адрес почты", "user-disabled": "Учётная запись отключена", "user-not-found": "Пользователь с такой почтой не найден. Сначала зарегистрируйтесь",
     "wrong-password": "Неверный пароль", "invalid-credential": "Неверная почта или пароль. Если вы ещё не зарегистрированы — нажмите «Регистрация»", "invalid-login-credentials": "Неверная почта или пароль. Если вы ещё не зарегистрированы — нажмите «Регистрация»",
@@ -548,7 +563,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "30.10.2026 · сборка 60";
+const WEB_VERSION = "30.10.2026 · сборка 61";
 (function updateWatch() {
   let shown = false;
   async function check() {
