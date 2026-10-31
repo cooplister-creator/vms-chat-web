@@ -548,7 +548,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "30.10.2026 · сборка 59";
+const WEB_VERSION = "30.10.2026 · сборка 60";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1739,7 +1739,7 @@ function buildBot(m) {
     mi = /^(убер\S*|убрать|удал\S*)\s*(почт\S*)?\s*[:\-]?\s*([^\s,;<>]+@[^\s,;<>]+\.[^\s,;<>]+)\s*$/i.exec(q.trim());
     if (mi) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
-      try { await db.collection("allowedEmails").doc(mi[2].toLowerCase()).delete(); BOT.push({ me: false, text: "🗑 Убрал из списка: " + mi[2].toLowerCase() }); }
+      try { await db.collection("allowedEmails").doc(mi[3].toLowerCase()).delete(); BOT.push({ me: false, text: "🗑 Убрал из списка: " + mi[3].toLowerCase() }); }
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
       draw(); return true; }
     mi = /^(добавь|создай|новое)\s+напоминани\S*[:\s]+(\d{4}-\d{2}-\d{2})\s*\|\s*(\d+)\s*\|\s*([\s\S]+)$/i.exec(q.trim());
