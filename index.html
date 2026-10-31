@@ -329,6 +329,7 @@ function showAuth() {
         if (!name.value.trim()) throw new Error("Введите имя");
         const r = await auth.createUserWithEmailAndPassword(email.value.trim(), pass.value);
         await r.user.updateProfile({ displayName: name.value.trim() });
+        try { await r.user.sendEmailVerification(); } catch (e) {}
       } else await auth.signInWithEmailAndPassword(email.value.trim(), pass.value);
     } catch (e) { err.textContent = authRu(e); }
     go.disabled = false;
@@ -343,16 +344,45 @@ function showPending() {
     h("button", { class: "btn ghost full", onclick: () => auth.signOut() }, "Выйти")));
 }
 
-auth.onAuthStateChanged(async u => {
+function showVerify(u, msg) {
+  const app = $("#app"); app.innerHTML = "";
+  const err = h("div", { class: "err" }); if (msg) err.textContent = msg;
+  app.append(h("div", { class: "auth" }, h("img", { src: LOGO }), h("h1", {}, "Подтвердите почту"),
+    h("p", {}, "Мы отправили письмо на " + (u.email || "") + ". Откройте его, перейдите по ссылке, затем нажмите «Я подтвердил». Если письма нет, загляните в папку «Спам»."),
+    err,
+    h("button", { class: "btn full", onclick: async () => { err.textContent = "";
+      try { await u.reload(); const cu = auth.currentUser;
+        if (!cu || !cu.emailVerified) { err.textContent = "Почта ещё не подтверждена. Перейдите по ссылке из письма."; return; }
+        await cu.getIdToken(true); enter(cu); } catch (e) { err.textContent = authRu(e); } } }, "Я подтвердил"),
+    h("button", { class: "btn ghost full", style: "margin-top:8px", onclick: async () => { try { await u.sendEmailVerification(); err.textContent = "Письмо отправлено ещё раз."; } catch (e) { err.textContent = authRu(e); } } }, "Отправить письмо ещё раз"),
+    h("button", { class: "link", onclick: () => auth.signOut() }, "Выйти")));
+}
+function showNotAllowed(u) {
+  const app = $("#app"); app.innerHTML = "";
+  app.append(h("div", { class: "auth" }, h("img", { src: LOGO }), h("h1", {}, "Почты нет в списке"),
+    h("p", {}, "Адрес " + (u.email || "") + " не входит в список сотрудников. Попросите администратора добавить вас, затем нажмите «Проверить снова»."),
+    h("button", { class: "btn full", onclick: () => enter(auth.currentUser || u) }, "Проверить снова"),
+    h("button", { class: "link", onclick: () => auth.signOut() }, "Выйти")));
+}
+auth.onAuthStateChanged(u => {
   unsubs.forEach(f => f()); unsubs = [];
   if (!u) { me = null; showAuth(); return; }
+  enter(u);
+});
+async function enter(u) {
+  unsubs.forEach(f => f()); unsubs = [];
   me = u; myName = u.displayName || u.email || "Менеджер";
   status = "loading";
   const ref = db.collection("users").doc(u.uid);
   try {
     const d = await ref.get();
     if (d.exists) await ref.set({ name: myName, email: u.email || "" }, { merge: true });
-    else await ref.set({ name: myName, email: u.email || "", approved: false, lastSeen: 0 });
+    else {
+      // новый сотрудник: почта должна быть подтверждена и значиться в списке разрешённых
+      if (!u.emailVerified) { showVerify(u); return; }
+      try { await ref.set({ name: myName, email: u.email || "", approved: false, lastSeen: 0 }); }
+      catch (e) { showNotAllowed(u); return; }
+    }
   } catch (e) { console.warn(e); }
   let seenSelf = false;
   unsubs.push(ref.onSnapshot(d => {
@@ -362,7 +392,7 @@ auth.onAuthStateChanged(async u => {
     const st = x.approved === false ? "pending" : "ok";
     if (st !== status) { status = st; st === "ok" ? startApp() : showPending(); }
   }));
-});
+}
 
 function startApp() {
   buildShell();
@@ -518,7 +548,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "30.10.2026 · сборка 55";
+const WEB_VERSION = "30.10.2026 · сборка 58";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1246,7 +1276,7 @@ async function delContract(c) {
 }
 
 /* ---------- помощник ---------- */
-let BOT = [{ me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Люкс Фуд», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" }];
+let BOT = [{ me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Ромашка», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" }];
 let DOCS = null;
 const STOP = new Set(["дай","дайте","мне","пришли","пришлите","скинь","скиньте","нужен","нужна","нужно","для","на","от","и","по","документ","документы","файл","пожалуйста","хочу","где","ооо"]);
 const norm = s => s.toLowerCase().replace(/ё/g, "е");
@@ -1310,10 +1340,12 @@ async function docsCall(params) {
   if (j.error) throw new Error(j.error); return j;
 }
 // напоминания только для разработчика: date — дата события, warn — за сколько дней начать напоминать
-const DEV_REMINDERS = [
-  { date: "2027-01-26", warn: 30, text: "Истекает токен GitHub «release-vms-chat-web». Обновить: GitHub → Settings → Developer settings → Fine-grained tokens → release-vms-chat-web → Regenerate token; затем вставить новый токен в секрет RELEASE_TOKEN (репозиторий manager-chat → Settings → Secrets and variables → Actions). Иначе сборки перестанут публиковать APK для автообновления." },
-];
-const BOT_HELLO = { me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Люкс Фуд», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" };
+let DEV_REMINDERS = []; // напоминания разработчика хранятся в базе (коллекция devNotes, читает только владелец), в коде их нет
+async function loadDevNotes() {
+  try { const sn = await db.collection("devNotes").get(); DEV_REMINDERS = sn.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(x => x.date && x.text).map(x => Object.assign(x, { warn: +x.warn || 30 })).sort((x, y) => x.date < y.date ? -1 : 1); }
+  catch (e) { DEV_REMINDERS = []; }
+}
+const BOT_HELLO = { me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Ромашка», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" };
 function buildBot(m) {
   // переписка хранится в этом браузере, чтобы не пропадала при обновлении страницы (очистить: «очисти чат»)
   const BK = "vmsbot_" + (me ? me.uid : "x");
@@ -1508,7 +1540,7 @@ function buildBot(m) {
         busy = false; draw(); return; }
     }
     if (/(что|чего)\s+(ты\s+)?(умеешь|можешь|могу)|твои\s+функц|^(помощь|справка|команды|help)$|что\s+(у\s+тебя\s+)?есть|как\s+(тобой\s+)?пользоваться/.test(norm(q).trim())) {
-      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Документы — «доверенность Люкс Фуд», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n📁 Инструкции по портам — «документы по порту ВМТП», «дай инструкцию Соллерс».\n⏳ Сроки — «что истекает скоро», «просроченные доверенности».\n📊 Excel — «выгрузи в экселе все доверенности».\n💱 Курсы — «курс доллара», «юань на бирже».\n📚 Словарь — «что такое ТН ВЭД», «инкотермс», «демередж», «СВХ».\n🧠 Уточнения — после ответа можно спросить коротко: «а срок?», «а вмкт?».\n👍/👎 под ответом — так я учусь." + (isAdmin ? "\n\nТолько для администраторов:\n➕ Прикрепите файл через 📎 (можно несколько сразу) — сам определю, что это (доверенность, ставки ЖД, фрахт), покажу, что изменится, останется нажать «Применить».\n🗑 «Удали доверенность …» — уберу из реестра (файл можно восстановить в течение 30 дней).\n📈 Ставки ЖД и морской фрахт загружаются файлами; старые ставки действуют до даты окончания." + (isDev() ? "\n\nТолько для разработчика:\n🎓 «запомни: вопрос = ответ», «что не нашлось», «чему ты научился», «забудь: вопрос», «напоминания»." : "") : "") }); draw(); return;
+      BOT.push({ me: false, text: "Я «Помощник ВМС». Вот что умею:\n\n📄 Документы — «доверенность Ромашка», «кфк ВМТП», «образец». Покажу срок действия и пришлю файл.\n📁 Инструкции по портам — «документы по порту ВМТП», «дай инструкцию Соллерс».\n⏳ Сроки — «что истекает скоро», «просроченные доверенности».\n📊 Excel — «выгрузи в экселе все доверенности».\n💱 Курсы — «курс доллара», «юань на бирже».\n📚 Словарь — «что такое ТН ВЭД», «инкотермс», «демередж», «СВХ».\n🧠 Уточнения — после ответа можно спросить коротко: «а срок?», «а вмкт?».\n👍/👎 под ответом — так я учусь." + (isAdmin ? "\n\nТолько для администраторов:\n➕ Прикрепите файл через 📎 (можно несколько сразу) — сам определю, что это (доверенность, ставки ЖД, фрахт), покажу, что изменится, останется нажать «Применить».\n🗑 «Удали доверенность …» — уберу из реестра (файл можно восстановить в течение 30 дней).\n📈 Ставки ЖД и морской фрахт загружаются файлами; старые ставки действуют до даты окончания." + (isDev() ? "\n\nТолько для разработчика:\n🎓 «запомни: вопрос = ответ», «что не нашлось», «чему ты научился», «забудь: вопрос», «напоминания», «разреши почты: …», «список почт»." : "") : "") }); draw(); return;
     }
     if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
       BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется. Можно просто перетащить файл в чат или прикрепить через 📎 — сам пойму, что это.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
@@ -1521,7 +1553,7 @@ function buildBot(m) {
         if (!DOCS) { const j = await docsCall("action=list"); DOCS = j.docs; }
         const q3 = norm(q).replace(/удал\S*|убер\S*|убра\S*|стер\S*|из реестра|реестр\S*/g, " ");
         const found = specific(q3).length ? searchDocs(DOCS.filter(d => d.kind === "poa"), q3) : [];
-        BOT.push(!specific(q3).length ? { me: false, text: "Какую доверенность удалить? Напишите, например: «удали доверенность Люкс Фуд»." } : !found.length ? { me: false, text: "Такую доверенность не нашёл. Уточните название компании." } : { me: false, text: "Нашёл: " + found.length + ". Нажмите «🗑 Удалить» у нужной — перед удалением спрошу подтверждение.", docs: found, del: true });
+        BOT.push(!specific(q3).length ? { me: false, text: "Какую доверенность удалить? Напишите, например: «удали доверенность Ромашка»." } : !found.length ? { me: false, text: "Такую доверенность не нашёл. Уточните название компании." } : { me: false, text: "Нашёл: " + found.length + ". Нажмите «🗑 Удалить» у нужной — перед удалением спрошу подтверждение.", docs: found, del: true });
       } catch (e) { DOCS = null; BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
       busy = false; draw(); return;
     }
@@ -1550,7 +1582,7 @@ function buildBot(m) {
         const expN = DOCS.filter(d => { const u = parseUntil(d.until); return d.kind === "poa" && u && u < today; }).length;
         const tail = expN ? " Уже просрочено: " + expN + " — напишите «что просрочено»." : "";
         BOT.push(soon.length ? { me: false, text: "Заканчиваются в течение 30 дней: " + soon.length + "." + tail, docs: soon } : { me: false, text: "✅ В ближайшие 30 дней ни одна доверенность не заканчивается." + tail });
-      } else if (!specific(q).length) BOT.push({ me: false, text: "Уточните, какой именно документ нужен: название компании (например «доверенность Люкс Фуд»), порт («кфк ВМТП») или тип образца." });
+      } else if (!specific(q).length) BOT.push({ me: false, text: "Уточните, какой именно документ нужен: название компании (например «доверенность Ромашка»), порт («кфк ВМТП») или тип образца." });
       else { const alt = /пасифик|pacific|лоджистик|соллерс|вмпп/.test(q.toLowerCase()), q2 = alt ? q.toLowerCase().replace(/пасифик|pacific|лоджистик|соллерс|вмпп/g, " ") + " вмкт вмрп" : q;
         const res = searchDocs(DOCS, q2);
         if (res.length && q.toLowerCase().includes("кфк")) {
@@ -1599,7 +1631,7 @@ function buildBot(m) {
     [["что такое 20gp", "что такое 40hq", "чем отличается 20gp от 40hq", "что значит 40hq"], "20GP — стандартный 20-футовый контейнер, 40HQ — 40-футовый «высокий» (high cube). В калькуляторе фрахта переключатель 20GP/40HQ; в блоке ЖД он сам ставит 20DC или 40HC."],
     [["как обновить фрахт", "как загрузить прайс фрахта", "как обновить цены фрахта", "как загрузить фрахт"], "Только для администраторов: прикрепите Excel-файл с прайсом фрахта в чат помощника (📎). Я разберу его и покажу, сколько предложений, линий и портов, а также сроки. После кнопки «Применить» новый прайс ЦЕЛИКОМ заменит старый.", true],
     [["как обновить ставки жд", "как загрузить ставки жд", "как обновить ставки", "как загрузить ставки"], "Только для администраторов: прикрепите файл ставок (PDF, Word или Excel) в чат помощника. Я разберу его и покажу, что изменится; ничего не меняется, пока не нажмёте «Применить». Понимаю файлы ФРЕШ ТЕРМИНАЛ, ТРАНС СИНЕРГИЯ, ЮНИОН, АТК.", true],
-    [["как удалить доверенность", "как убрать доверенность"], "Администратор пишет мне: «удали доверенность Люкс Фуд» — я найду её и попрошу подтверждение. Файл можно будет восстановить в течение 30 дней.", true],
+    [["как удалить доверенность", "как убрать доверенность"], "Администратор пишет мне: «удали доверенность Ромашка» — я найду её и попрошу подтверждение. Файл можно будет восстановить в течение 30 дней.", true],
     [["как загрузить доверенность", "как добавить доверенность"], "Администратор прикрепляет файл доверенности (PDF или фото) в чат помощника — 📎 или перетащить в окно. Я распознаю срок и добавлю в реестр.", true],
     [["почему не видно новые цены", "почему цены не обновились", "когда появятся новые цены", "почему старые цены"], "Новые цены появляются после обновления страницы (на сайте) или экрана (в приложении) либо при следующем заходе. Обновите и проверьте ещё раз."],
     [["откуда курс валют", "откуда берутся курсы", "что такое мб cn", "что значит мб cn"], "Курсы $, €, CN — по ЦБ РФ. «МБ CN» — курс юаня на Московской бирже, он выделен отдельно. Обновляются при открытии и кнопкой ⟳."],
@@ -1654,6 +1686,7 @@ function buildBot(m) {
   const remText = r => { const d = remLeft(r); return "⏰ " + r.date.split("-").reverse().join(".") + " — " + (d > 0 ? "через " + d + " дн" : d === 0 ? "сегодня" : "срок прошёл " + (-d) + " дн назад") + ".\n" + r.text; };
   async function adminCmd(q) {
     const n = norm(q).trim();
+    let mi;
     if (/^(отработан\S*(\s+(предложени\S*|идеи|список))?|архив\s+предложени\S*)$/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
       try { const ds = await ideasList(true);
@@ -1669,7 +1702,7 @@ function buildBot(m) {
         for (const d of IDEAS) if (d.data().status !== "seen") d.ref.update({ status: "seen", seenTs: Date.now() }).catch(() => {}); }
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
       busy = false; draw(); return true; }
-    const mi = /^(готово|сделано|отработал\S*)\s+(все|\d+)\s*[:=\-]?\s*([\s\S]*)$/i.exec(q.trim());
+    mi = /^(готово|сделано|отработал\S*)\s+(все|\d+)\s*[:=\-]?\s*([\s\S]*)$/i.exec(q.trim());
     if (mi) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       if (!IDEAS.length) { BOT.push({ me: false, text: "Сначала напишите «предложения» — я покажу список, потом отмечайте номер." }); draw(); return true; }
@@ -1686,7 +1719,40 @@ function buildBot(m) {
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
       draw(); return true; }
     if (/^(напоминани|что\s+мне\s+напомнить|мои\s+напоминани)/.test(n)) { BOT.push({ me: true, text: q });
-      BOT.push({ me: false, text: !isDev() ? "Это видит только разработчик." : DEV_REMINDERS.length ? DEV_REMINDERS.map(remText).join("\n\n") : "Напоминаний нет." }); draw(); return true; }
+      if (isDev()) await loadDevNotes();
+      BOT.push({ me: false, text: !isDev() ? "Это видит только разработчик." : DEV_REMINDERS.length ? DEV_REMINDERS.map(remText).join("\n\n") + "\n\nДобавить: «добавь напоминание: 2027-01-26 | 30 | текст» (дата | за сколько дней начинать | текст). Убрать все: «очисти напоминания»." : "Напоминаний нет. Добавить: «добавь напоминание: 2027-01-26 | 30 | текст»." }); draw(); return true; }
+    mi = /^(разреш\S*|допуст\S*|добавь)\s+почт\S*[:\s]+([\s\S]+)$/i.exec(q.trim());
+    if (mi) { BOT.push({ me: true, text: "разреши почты…" });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      const list = [...new Set((mi[2].match(/[^\s,;<>]+@[^\s,;<>]+\.[^\s,;<>]+/g) || []).map(x => x.toLowerCase().replace(/[.)]+$/, "")))].slice(0, 400);
+      if (!list.length) { BOT.push({ me: false, text: "Не нашёл адресов. Пример: «разреши почты: ivan@firma.ru, anna@firma.ru»." }); draw(); return true; }
+      try { const b = db.batch(); list.forEach(e => b.set(db.collection("allowedEmails").doc(e), { email: e, by: myName, ts: Date.now() })); await b.commit();
+        BOT.push({ me: false, text: "✅ Добавлено почт: " + list.length + ". Эти люди смогут зарегистрироваться (после подтверждения почты). Список: «список почт»." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      draw(); return true; }
+    if (/^(список\s+почт|разрешенн\S*\s+почт\S*|почты)$/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
+      try { const sn = await db.collection("allowedEmails").limit(500).get(); const em = sn.docs.map(d => d.id).sort();
+        BOT.push({ me: false, text: em.length ? "📧 Разрешённые почты (" + em.length + "):\n" + em.join("\n") + "\n\nУбрать: «убери почту адрес»." : "Список пуст. Добавить: «разреши почты: a@firma.ru, b@firma.ru»." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
+    mi = /^(убер\S*|удали)\s+почт\S*[:\s]+(\S+@\S+)/i.exec(q.trim());
+    if (mi) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { await db.collection("allowedEmails").doc(mi[2].toLowerCase()).delete(); BOT.push({ me: false, text: "🗑 Убрал из списка: " + mi[2].toLowerCase() }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
+    mi = /^(добавь|создай|новое)\s+напоминани\S*[:\s]+(\d{4}-\d{2}-\d{2})\s*\|\s*(\d+)\s*\|\s*([\s\S]+)$/i.exec(q.trim());
+    if (mi) { BOT.push({ me: true, text: "добавь напоминание…" });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { await db.collection("devNotes").add({ date: mi[2], warn: +mi[3], text: mi[4].trim().slice(0, 1500), ts: Date.now() }); await loadDevNotes(); BOT.push({ me: false, text: "✅ Напоминание добавлено. Всего: " + DEV_REMINDERS.length }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
+      draw(); return true; }
+    if (/^очист\S*\s+напоминани/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { const sn = await db.collection("devNotes").limit(100).get(); for (const d of sn.docs) await d.ref.delete(); DEV_REMINDERS = []; BOT.push({ me: false, text: "🗑 Убрал напоминаний: " + sn.size }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+      draw(); return true; }
     if (/^(очист\S*|сотри|удали)\s+(чат|историю|переписку|диалог)/.test(n)) { BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} draw(); return true; }
     let m = /^запомни[:\s]+([\s\S]+?)\s*=\s*([\s\S]+)$/.exec(q.trim().replace(/^Запомни/, "запомни"));
     if (m) { BOT.push({ me: true, text: q });
@@ -1764,10 +1830,10 @@ function buildBot(m) {
   if (isDev()) { for (let i = BOT.length - 1; i >= 0; i--) if (/^💡 Новых предложений/.test(BOT[i].text || "")) BOT.splice(i, 1);
     ideasList(false).then(ds => { const nw = ds.filter(d => d.data().status !== "seen").length; if (nw) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + nw + ". Напишите «предложения», чтобы посмотреть." }); } draw(); }).catch(() => {}); }
   // разработчику — напоминание о ближайших сроках (не чаще раза в сутки по каждому)
-  if (isDev()) { const today = new Date().toDateString(); let add = false;
+  if (isDev()) loadDevNotes().then(() => { const today = new Date().toDateString(); let add = false;
     DEV_REMINDERS.forEach(r => { if (remLeft(r) <= r.warn) { const k = "vmsrem_" + r.date; let seen = ""; try { seen = localStorage.getItem(k) || ""; } catch (e) {}
       if (seen !== today) { BOT.push({ me: false, text: remText(r) }); try { localStorage.setItem(k, today); } catch (e) {} add = true; } } });
-    if (add) draw(); }
+    if (add) draw(); });
 }
 </script>
 </body>
