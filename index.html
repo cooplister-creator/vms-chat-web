@@ -428,6 +428,7 @@ function startApp() {
   }));
   const beat = () => { if (!document.hidden) db.collection("users").doc(me.uid).set({ lastSeen: Date.now() }, { merge: true }); };
   beat(); const iv = setInterval(beat, 40000);
+  setTimeout(() => { try { loadFreight(() => {}); } catch (e) {} }, 4000); // подгружаем ставки заранее, чтобы раздел открывался сразу
   const vis = () => { if (document.hidden) db.collection("users").doc(me.uid).set({ lastSeen: 0 }, { merge: true }); else beat(); };
   document.addEventListener("visibilitychange", vis);
   window.addEventListener("pagehide", () => { navigator.sendBeacon && 0; });
@@ -563,7 +564,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 62";
+const WEB_VERSION = "31.10.2026 · сборка 63";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1075,8 +1076,12 @@ let FR = null, frLoading = false;
 const FR_PORT = "Только порт";
 async function loadFreight(draw) {
   if (FR || frLoading) return; frLoading = true;
-  try { const j = await docsCall("action=freight"); FR = { rows: j.rows || [], dict: j.dict || [], file: j.file || "", updated: j.updated || "" }; }
-  catch (e) { FR = { rows: [], dict: [], err: e.message || "ошибка" }; }
+  let j = null, err = "";
+  for (let k = 0; k < 2 && !j; k++) {
+    try { j = await docsCall("action=freight"); }
+    catch (e) { err = e.message || "ошибка"; if (k === 0) await new Promise(r => setTimeout(r, 1500)); }
+  }
+  FR = j ? { rows: j.rows || [], dict: j.dict || [], file: j.file || "", updated: j.updated || "" } : { rows: [], dict: [], err: err || "ошибка" };
   frLoading = false; draw();
 }
 const frDate = s => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s || ""); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
@@ -1085,6 +1090,11 @@ function freightBlock(draw) {
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚢 Морской фрахт · Китай → Владивосток / Восточный"));
   const msg = tx => { d.append(h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, tx)); return d; };
   if (!FR) { loadFreight(draw); return msg("Загружаю ставки…"); }
+  if (FR.err && !FR.rows.length) {
+    d.append(h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, "Не удалось загрузить: " + FR.err),
+      h("button", { class: "btn sm2", onclick: () => { FR = null; draw(); } }, "Повторить"));
+    return d;
+  }
   if (!FR.rows.length) return msg(FR.err ? "Не удалось загрузить: " + FR.err : "Ставок фрахта пока нет. Администратор может загрузить прайс помощнику.");
   const t0 = new Date(); t0.setHours(0, 0, 0, 0);
   // r: 0 линия, 1 порт отпр., 2 порт назн., 3 дроп, 4 тип, 5 20GP, 6 40HQ, 7 рейс, 8 дней, 9 до, 10 условия, 11 примечание, 12 даты отхода
