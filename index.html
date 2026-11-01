@@ -323,7 +323,12 @@ function showAuth() {
   const err = h("div", { class: "err" });
   const name = h("input", { class: "field hidden", placeholder: "Имя и фамилия" });
   const email = h("input", { class: "field", type: "email", placeholder: "E-mail" });
-  const pass = h("input", { class: "field", type: "password", placeholder: "Пароль" });
+  const passIn = h("input", { class: "field", type: "password", placeholder: "Пароль", style: "padding-right:48px;margin:0" });
+  const eye = h("button", { type: "button", title: "Показать пароль", style: "position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:20px;cursor:pointer;padding:6px 8px;opacity:.7" }, "👁");
+  eye.onclick = () => { const show = passIn.type === "password"; passIn.type = show ? "text" : "password"; eye.style.opacity = show ? "1" : ".7"; eye.title = show ? "Скрыть пароль" : "Показать пароль"; };
+  const pass = h("div", { style: "position:relative;margin:6px 0" }, passIn, eye);
+  Object.defineProperty(pass, "value", { get: () => passIn.value });
+  pass.focus = () => passIn.focus();
   const sub = h("p", {}, "Войдите в аккаунт");
   const go = h("button", { class: "btn full" }, "Войти");
   const sw = h("button", { class: "link" }, "Нет аккаунта? Зарегистрироваться");
@@ -347,7 +352,7 @@ function showAuth() {
     } catch (e) { err.textContent = authRu(e); }
     go.disabled = false;
   };
-  go.onclick = submit; pass.onkeydown = e => { if (e.key === "Enter") submit(); };
+  go.onclick = submit; passIn.onkeydown = e => { if (e.key === "Enter") submit(); };
   app.append(h("div", { class: "auth" }, h("img", { src: LOGO }), h("h1", {}, "ВМС Групп Chat"), sub, name, email, pass, agreeBox, err, go, sw, polLink));
 }
 function showPending() {
@@ -564,7 +569,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 63";
+const WEB_VERSION = "31.10.2026 · сборка 64";
 (function updateWatch() {
   let shown = false;
   async function check() {
