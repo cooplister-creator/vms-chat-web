@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 85";
+const WEB_VERSION = "02.11.2026 · сборка 86";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1943,6 +1943,7 @@ function buildBot(m) {
         BOT.push({ me: false, text: "🧹 Всё очищено: ЖД-ставок удалено " + j.rail + ", портов обнулено " + j.ports + ". Калькулятор пуст до новой загрузки. Копии на Диске: " + j.backups.join(", ") + ". Теперь прикрепляйте файлы по одному и нажимайте «Применить»." }); }
       catch (e) { BOT.push({ me: false, text: "Не получилось очистить: " + (e.message || "ошибка") }); }
       draw(); return true; }
+    if (/^очистить\s+вс[её]$/.test(n)) { BOT.push({ me: true, text: q }); BOT.push({ me: false, text: "Подтверждать нечего: очистка уже выполнена или время ожидания (3 минуты) истекло. Чтобы очистить заново, напишите «очисти все ставки»." }); draw(); return true; }
     if (/^(очист\S*|удали\S*|сотри\S*|сбрось\S*)\s+(вс[её]\s+)?(ставк|тариф|жд|порт|прр)/.test(n) && /(вс[её]|тариф|ставк)/.test(n) && !/предложени|отработан/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       WIPE_ASK = Date.now();
