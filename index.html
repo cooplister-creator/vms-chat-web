@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 80";
+const WEB_VERSION = "02.11.2026 · сборка 82";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -958,7 +958,7 @@ function buildAlerts(m) {
 }
 
 /* ---------- расчёт ставки ---------- */
-let calc = { pfut: false, tprr: "", pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
+let calc = { rg: false, pfut: false, tprr: "", pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
@@ -1017,6 +1017,8 @@ function activeRates() {
   return a;
 }
 const MAIN_CITIES = ["Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Красноярск", "Иркутск", "Казань", "Ростов-на-Дону", "Краснодар", "Самара", "Челябинск", "Омск"];
+const rgPrice = r => money(r.price + (calc.rg && r.guard ? r.guard : 0));
+const rgSt = r => r.station + (calc.rg ? (r.guard ? " · +охрана " + money(r.guard) + (r.gvat ? " (НДС " + r.gvat + "%)" : "") : " · охрана не указана") : "");
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
   const AR = activeRates().filter(r => !r.arch || (isAdmin && SHOWARCH)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
@@ -1065,15 +1067,16 @@ function railBlock(draw) {
       d.append(box);
     }
   }
+  d.append(h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rg, onchange: e => { calc.rg = e.target.checked; draw(); } }), "С охраной (где охрана указана в файле)"));
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
     const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : a.price - b.price));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, money(r.price), r.contractor, r.station, per(r), r.future, r.file)); return; }
+    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, rgPrice(r), r.contractor, rgSt(r), per(r), r.future, r.file)); return; }
       const k = rkey(r), cb = h("input", { type: "checkbox", style: "width:20px;height:20px;margin:0 10px 0 0;flex:none" });
       cb.checked = SEL.has(k); cb.onchange = () => { cb.checked ? SEL.add(k) : SEL.delete(k); draw(); };
-      const el = card(1, money(r.price), r.contractor, r.station, per(r), false, r.file);
+      const el = card(1, rgPrice(r), r.contractor, rgSt(r), per(r), false, r.file);
       el.classList.remove("best"); el.style.opacity = ".7"; el.style.background = "#eceff1";
       el.querySelector(".sm").append(" · ", h("span", { style: "color:#6d4c41;font-weight:600" }, "в архиве — нужна замена"));
       el.style.alignItems = "center"; el.prepend(cb); col.append(el); });
@@ -1119,7 +1122,7 @@ const AUTO_T = { base: 20000, limit: 20, add: 10000 };
 function portTermView(d, pd, draw) {
   if (!ratesLoaded) loadRates(draw);
   const vsk = pd.id === "vsk", SPN = "СУХОЙ ПОРТ НАХОДКА (СПН)";
-  const AR = activeRates().filter(r => !r.arch && (calc.pfut || !r.future) && (!vsk || /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor)));
+  const AR = activeRates().filter(r => !r.arch && (calc.pfut || !r.future) && (vsk === /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor)));
   const tkey = r => r.contractor;
   let terms = [...new Set(AR.map(tkey))].sort((a, b) => a.localeCompare(b, "ru"));
   if (vsk && !terms.length) terms = [SPN];
@@ -1146,6 +1149,7 @@ function portTermView(d, pd, draw) {
       h("span", { style: "font-weight:600;font-size:13px" }, vsk ? "Вес груза, т" : "Брутто контейнера, т"),
       h("input", { class: "sel", type: "number", inputmode: "decimal", step: "0.1", min: "0", value: calc.pgross, placeholder: vsk ? "напр. 28" : "напр. 22", style: "width:110px", onchange: e => { calc.pgross = e.target.value; draw(); } })),
     seg(["НДС 0%", "НДС 22%"], calc.pvat, i => { calc.pvat = i; draw(); }),
+    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rg, onchange: e => { calc.rg = e.target.checked; draw(); } }), "С охраной ЖД"),
     h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.pfut, onchange: e => { calc.pfut = e.target.checked; draw(); } }), "Показывать будущие ставки"),
     prrs.length ? lab("Вид ПРР в порту") : null,
     prrs.length ? h("select", { class: "sel", onchange: e => { calc.tprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.tprr) }, o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))) : null);
@@ -1156,12 +1160,14 @@ function portTermView(d, pd, draw) {
   if (vsk) { if (heavy) res.append(line("⚖️ Надбавка: вес груза больше 30 т", money(autoAdd))); }
   else res.append(line("🚛 Авто порт → терминал" + (heavy ? " (+" + money(autoAdd) + " брутто > " + AUTO_T.limit + " т)" : ""), money(auto)));
   res.append(line("🚆 ЖД: " + calc.pterm + " → " + (rl ? rl.station : calc.city) + " · " + TYPE_NAMES[calc.type] + (rl && rl.future ? " · с " + rl.from : ""), noRates ? "ставки СПН (с перемещением из ВСК) будут добавлены" : rl ? money(rl.price) : "нет ставки (НДС " + (calc.pvat ? 22 : 0) + "%)"));
-  res.append(line("Итого", noRates ? "—" : rl ? money(prrP + auto + rl.price) : "—", true));
+  const gd = calc.rg && rl && rl.guard ? rl.guard : 0;
+  if (calc.rg && rl) res.append(line("🛡 Охрана ЖД" + (rl.gvat ? " (НДС " + rl.gvat + "%)" : ""), rl.guard ? money(rl.guard) : "не указана в файле"));
+  res.append(line("Итого", noRates ? "—" : rl ? money(prrP + auto + rl.price + gd) : "—", true));
   d.append(res);
   if (calc.pfut) {
     const fm = {}; AR.filter(r => r.future && tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).forEach(r => { if (!fm[r.from] || r.price < fm[r.from].price) fm[r.from] = r; });
     const fl = Object.keys(fm).map(k => fm[k]).filter(r => r !== rl).sort((a, b) => a.fd - b.fd);
-    if (fl.length) fl.forEach(r => d.append(h("div", { style: "margin-top:6px;padding:8px 10px;border-radius:10px;background:#fff4cc;color:#5a3d00;font-size:13px" }, "🔜 С " + r.from + (r.station ? " (" + r.station + ")" : "") + ": ЖД " + money(r.price) + " → итого " + money(prrP + auto + r.price))));
+    if (fl.length) fl.forEach(r => d.append(h("div", { style: "margin-top:6px;padding:8px 10px;border-radius:10px;background:#fff4cc;color:#5a3d00;font-size:13px" }, "🔜 С " + r.from + (r.station ? " (" + r.station + ")" : "") + ": ЖД " + money(r.price) + " → итого " + money(prrP + auto + r.price + (calc.rg && r.guard ? r.guard : 0)))));
     else d.append(h("div", { class: "note", style: "margin-top:6px" }, "Будущих ставок для этого терминала, города и типа контейнера нет."));
   }
   d.append(h("div", { class: "note", style: "margin-top:6px" }, "ПРР — по тарифам порта (НДС как в файле порта). " + (vsk ? "Тариф СПН включает перемещение из ВСК; при весе груза больше 30 т надбавка 5 000 ₽. " : "Авто: " + money(AUTO_T.base) + " без НДС, при брутто больше " + AUTO_T.limit + " т +" + money(AUTO_T.add) + " (весовые рамки). ") + "НДС 22% применяется к авто/надбавке и берётся из ставок ЖД с НДС 22%. Фрахт — в своём блоке."));
