@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 74";
+const WEB_VERSION = "02.11.2026 · сборка 75";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1179,6 +1179,22 @@ function portBlock(draw) {
   }
   if (pfiles.length) d.append(h("div", { style: "margin-top:12px" }, h("div", { style: "font-weight:600;font-size:13px;margin-bottom:4px" }, "📎 Тарифы порта (исходные файлы)"),
     h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" }, ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", title: f.n, onclick: () => openRateFile(f.id) }, "📄 " + f.t + (f.d ? " · " + f.d : ""))))));
+  if (isAdmin) {
+    const clr = async (key, what) => {
+      if (!confirm("Убрать из порта «" + pd.name + "»: " + what + "?")) return;
+      try {
+        const tk = await me.getIdToken();
+        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "port_clear", token: tk, port: pd.id, key }) });
+        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+        PORT = null; alert("Убрано: " + j.cleared + ". Осталось: КП " + j.kp + ", одиночные " + j.od + ", услуг " + j.svc + ". Обновите страницу."); 
+      } catch (e) { alert("Не получилось: " + (e.message || e)); }
+    };
+    d.append(h("div", { style: "margin-top:12px" }, h("div", { style: "font-weight:600;font-size:13px;margin-bottom:4px" }, "🗑 Убрать загруженное (админ)"),
+      h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" },
+        ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", onclick: () => clr(f.k, f.t) }, "✕ " + f.t + (f.d ? " · " + f.d : ""))),
+        h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", onclick: () => clr("*svc", "все услуги") }, "✕ Все услуги"),
+        h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px;color:#c0392b", onclick: () => clr("*all", "ВСЁ (ставки, услуги, файлы)") }, "✕ Весь порт"))));
+  }
   d.append(h("div", { class: "note", style: "margin-top:10px" }, (pd.vat ? "Цены как в файлах порта (см. «Итого»). " : "Без НДС. ") + "Хранение не включено, 45 фут не считаем. " + (pd.railPeriod ? "ЖД-ставки действуют " + pd.railPeriod + ". " : "") + "Тарифы " + pd.name + (pd.date ? " от " + pd.date : "") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки — от порта до станции назначения."));
   return d;
 }
