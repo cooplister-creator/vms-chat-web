@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 68";
+const WEB_VERSION = "31.10.2026 · сборка 69";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1123,7 +1123,7 @@ function portBlock(draw) {
     return d;
   }
   d.append(h("div", { class: "bt", style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" }, h("span", {}, "⚓ Порт " + pd.name + " → станция"),
-    ports.length > 1 ? h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { calc.pport = ""; draw(); } }, "↩ Другой порт") : null));
+    h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { calc.pport = ""; draw(); } }, "↩ Выбрать порт")));
   if (!pd.kp.length && !pd.od.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
   const list = calc.pm === 0 ? pd.kp : pd.od;
   if (!list.some(r => r.st === calc.pst)) calc.pst = list.length ? list[0].st : "";
