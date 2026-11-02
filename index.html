@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 67";
+const WEB_VERSION = "31.10.2026 · сборка 68";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -958,7 +958,7 @@ function buildAlerts(m) {
 }
 
 /* ---------- расчёт ставки ---------- */
-let calc = { rail: true, freight: true, port: false, pport: "", pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
+let calc = { rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
@@ -1125,36 +1125,30 @@ function portBlock(draw) {
   d.append(h("div", { class: "bt", style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" }, h("span", {}, "⚓ Порт " + pd.name + " → станция"),
     ports.length > 1 ? h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { calc.pport = ""; draw(); } }, "↩ Другой порт") : null));
   if (!pd.kp.length && !pd.od.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
-  const names = [...new Set(pd.kp.map(r => r.st).concat(pd.od.map(r => r.st)))];
-  if (!names.includes(calc.pst)) calc.pst = names[0];
-  const chips = PCHIPS.filter(c => names.includes(c));
-  d.append(h("div", { class: "cityrow" }, ...chips.map(c => h("button", { class: "chip" + (c === calc.pst ? " on" : ""), onclick: () => { calc.pst = c; draw(); } }, c))),
-    h("div", { class: "ctl2" },
-      h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...names.slice().sort((x, y) => x.localeCompare(y, "ru")).map(c => h("option", { value: c, selected: c === calc.pst }, c)))),
+  const list = calc.pm === 0 ? pd.kp : pd.od;
+  if (!list.some(r => r.st === calc.pst)) calc.pst = list.length ? list[0].st : "";
+  d.append(h("div", { class: "ctl2" },
+    seg(["Контейнерный поезд", "Одиночные / группа"], calc.pm, i => { calc.pm = i; draw(); }),
+    h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...list.map(r => h("option", { value: r.st, selected: r.st === calc.pst }, r.st)))),
     seg(PSZ, calc.psz, i => { calc.psz = i; draw(); }),
     h("label", { style: "display:flex;align-items:center;gap:8px;margin:6px 0" }, h("input", { type: "checkbox", checked: calc.pg, onchange: e => { calc.pg = e.target.checked; draw(); } }), "С охраной"));
+  if (!list.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px;margin:8px 0" }, "Для этого вида отправки ставок пока нет.")); return d; }
+  const row = list.find(r => r.st === calc.pst);
   const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
   if (!prrs.some(o => String(o.i) === String(calc.pprr))) { const def = prrs.find(o => o.x.c === "1.1.1") || prrs[0]; calc.pprr = def ? String(def.i) : ""; }
   const prr = prrs.find(o => String(o.i) === String(calc.pprr)), prrP = prr ? prr.x.p : 0;
   const extras = pd.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(pd.id + "|" + o.i));
   const exSum = extras.reduce((a, o) => a + o.x.p, 0);
-  const per = pd.railPeriod ? "ЖД " + pd.railPeriod : (pd.date ? "тарифы от " + pd.date : "");
-  const items = []; let note = "";
-  [["Контейнерный поезд", pd.kp], ["Одиночная отправка / группа вагонов", pd.od]].forEach(([nm, list]) => {
-    const row = list.find(r => r.st === calc.pst); if (!row) return;
-    const pn = portNext(row), r = portRail(pn.now, calc.psz, calc.pg);
-    if (r.price == null) return;
-    if (r.note) note = r.note;
-    let later = null;
-    if (pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) later = { from: pn.later.from, total: r2.price + prrP + exSum }; }
-    items.push({ nm, rail: r.price, total: r.price + prrP + exSum, later });
-  });
-  const col = h("div", {}, h("h2", { class: "v" }, "Без НДС"));
-  if (!items.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-  items.sort((a, b) => a.total - b.total).forEach((it, i) => col.append(card(i, money(it.total), it.nm, "ЖД " + money(it.rail) + " + ПРР " + money(prrP) + (exSum ? " + допуслуги " + money(exSum) : ""),
-    per + (it.later ? " · с " + it.later.from + ": " + money(it.later.total) : ""), false, "")));
-  d.append(col);
-  if (note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + note));
+  const pn = portNext(row), r = portRail(pn.now, calc.psz, calc.pg);
+  const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
+  const res = h("div", { class: "rc", style: "display:block" });
+  res.append(line("🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (calc.pg ? " · с охраной" : ""), r.price != null ? money(r.price) : "нет данных"));
+  if (prr) res.append(line("⚓ ПРР: " + prr.x.g.replace(/\s*\(.*$/, "") + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), money(prr.x.p)));
+  extras.forEach(o => res.append(line("➕ " + o.x.n, money(o.x.p))));
+  res.append(line("Итого без НДС", r.price != null ? money(r.price + prrP + exSum) : "—", true));
+  d.append(res);
+  if (pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) d.append(h("div", { class: "note", style: "margin-top:6px;color:#d32f2f" }, "С " + pn.later.from + " ставка ЖД изменится: " + money(r2.price) + " (итого " + money(r2.price + prrP + exSum) + "). До этой даты действует цена выше.")); }
+  if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
   d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
     h("select", { class: "sel", onchange: e => { calc.pprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.pprr) }, o.x.g.replace(/\s*\(.*$/, "") + " · " + o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))));
   d.append(h("button", { class: "btn ghost", style: "margin:10px 0 4px;padding:6px 12px;font-size:13px", onclick: () => { calc.pexOpen = !calc.pexOpen; draw(); } }, (calc.pexOpen ? "▾" : "▸") + " Допуслуги порта" + (extras.length ? " (выбрано " + extras.length + ")" : "")));
@@ -1169,7 +1163,7 @@ function portBlock(draw) {
       d.append(h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0" }, cb, h("span", { style: "flex:1" }, x.n), h("span", { style: "white-space:nowrap" }, money(x.p))));
     });
   }
-  d.append(h("div", { class: "note", style: "margin-top:10px" }, "Без НДС. Хранение не включено, 45 фут не считаем. Тарифы " + pd.name + (pd.date ? " от " + pd.date : "") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки — от порта до станции назначения."));
+  d.append(h("div", { class: "note", style: "margin-top:10px" }, "Без НДС. Хранение не включено, 45 фут не считаем. " + (pd.railPeriod ? "ЖД-ставки действуют " + pd.railPeriod + ". " : "") + "Тарифы " + pd.name + (pd.date ? " от " + pd.date : "") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки — от порта до станции назначения."));
   return d;
 }
 /* ---------- фрахт: реальные данные из таблицы «Фрахт» ---------- */
