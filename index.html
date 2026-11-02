@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 86";
+const WEB_VERSION = "02.11.2026 · сборка 87";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1937,17 +1937,17 @@ function buildBot(m) {
     if (/^очистить\s+вс[её]$/.test(n) && WIPE_ASK && Date.now() - WIPE_ASK < 180000) { BOT.push({ me: true, text: q }); WIPE_ASK = 0;
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       try { const tk = await me.getIdToken();
-        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe", token: tk, rail: true, port: true, word: "ОЧИСТИТЬ" }) });
+        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe", token: tk, rail: true, port: true, freight: true, word: "ОЧИСТИТЬ" }) });
         const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
-        RATES = []; PORT = null; ratesLoaded = true;
-        BOT.push({ me: false, text: "🧹 Всё очищено: ЖД-ставок удалено " + j.rail + ", портов обнулено " + j.ports + ". Калькулятор пуст до новой загрузки. Копии на Диске: " + j.backups.join(", ") + ". Теперь прикрепляйте файлы по одному и нажимайте «Применить»." }); }
+        RATES = []; PORT = null; FR = null; ratesLoaded = true;
+        BOT.push({ me: false, text: "🧹 Всё очищено: ЖД-ставок удалено " + j.rail + ", портов обнулено " + j.ports + ", строк фрахта " + (j.freight || 0) + ". Калькулятор пуст до новой загрузки. Копии на Диске: " + j.backups.join(", ") + ". Теперь прикрепляйте файлы по одному и нажимайте «Применить»." }); }
       catch (e) { BOT.push({ me: false, text: "Не получилось очистить: " + (e.message || "ошибка") }); }
       draw(); return true; }
     if (/^очистить\s+вс[её]$/.test(n)) { BOT.push({ me: true, text: q }); BOT.push({ me: false, text: "Подтверждать нечего: очистка уже выполнена или время ожидания (3 минуты) истекло. Чтобы очистить заново, напишите «очисти все ставки»." }); draw(); return true; }
     if (/^(очист\S*|удали\S*|сотри\S*|сбрось\S*)\s+(вс[её]\s+)?(ставк|тариф|жд|порт|прр)/.test(n) && /(вс[её]|тариф|ставк)/.test(n) && !/предложени|отработан/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       WIPE_ASK = Date.now();
-      BOT.push({ me: false, text: "⚠️ Это удалит ВСЕ ЖД-ставки, ВСЕ ПРР и услуги и ВСЕ порты. Калькулятор будет пустым до новой загрузки. Перед этим на Диске сохранится копия.\nЧтобы подтвердить, напишите: очистить всё (в течение 3 минут)." }); draw(); return true; }
+      BOT.push({ me: false, text: "⚠️ Это удалит ВСЕ ЖД-ставки, ВСЕ ПРР и услуги, ВСЕ порты и ВЕСЬ фрахт. Калькулятор будет пустым до новой загрузки. Перед этим на Диске сохранится копия.\nЧтобы подтвердить, напишите: очистить всё (в течение 3 минут)." }); draw(); return true; }
     if (/^очист\S*\s+(предложени|отработан)/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       try { const onlyDone = /отработан/.test(n); const s = await db.collection("botIdeas").limit(300).get(); const del = s.docs.filter(d => !onlyDone || d.data().status === "done");
