@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 69";
+const WEB_VERSION = "31.10.2026 · сборка 70";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1093,7 +1093,13 @@ async function loadPort(draw) {
 const PSZ = ["20' до 24 т", "20' 24–28 т", "20' свыше 28 т", "40' до 28 т", "40' свыше 28 т"];
 const PEX = new Set();
 const PCHIPS = ["Электроугли", "Шушары", "Заневский пост", "Клещиха", "Екатеринбург-товарный", "Базаиха", "Батарейная", "Ростов-Товарный", "Тольятти", "Омск-Восточный", "Хабаровск-2"];
+const svp = x => (calc.psz >= 3 && x.p40 != null) ? x.p40 : x.p;   // цена услуги порта: для 40' своя, если указана
 function portRail(row, sz, guard) {   // → { price, note }
+  if (row.ga) {   // у порта охрана — отдельная добавка (в тарифах указана с НДС 22%)
+    const base = sz === 4 ? null : row.p[sz * 2];
+    if (base == null) return { price: null, note: "" };
+    return { price: base + (guard ? (row.ga[sz >= 3 ? 1 : 0] || 0) : 0), note: guard ? "Охрана в тарифах порта указана с НДС 22% — добавлена к ставке как есть." : "" };
+  }
   const g = guard ? 1 : 0;
   if (sz === 4) {
     if (row.p45 && row.p45[g] != null) return { price: row.p45[g], note: "Для 40' свыше 28 т в тарифах указана цена как для 45 фут — она и применена. Для 45 фут ставка такая же." };
@@ -1137,19 +1143,20 @@ function portBlock(draw) {
   const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
   if (!prrs.some(o => String(o.i) === String(calc.pprr))) { const def = prrs.find(o => o.x.c === "1.1.1") || prrs[0]; calc.pprr = def ? String(def.i) : ""; }
   const prr = prrs.find(o => String(o.i) === String(calc.pprr)), prrP = prr ? prr.x.p : 0;
-  const extras = pd.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(pd.id + "|" + o.i));
-  const exSum = extras.reduce((a, o) => a + o.x.p, 0);
+  const extras = pd.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(pd.id + "|" + o.i) && svp(o.x) != null);
+  const exSum = extras.reduce((a, o) => a + svp(o.x), 0);
   const pn = portNext(row), r = portRail(pn.now, calc.psz, calc.pg);
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const res = h("div", { class: "rc", style: "display:block" });
   res.append(line("🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (calc.pg ? " · с охраной" : ""), r.price != null ? money(r.price) : "нет данных"));
   if (prr) res.append(line("⚓ ПРР: " + prr.x.g.replace(/\s*\(.*$/, "") + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), money(prr.x.p)));
-  extras.forEach(o => res.append(line("➕ " + o.x.n, money(o.x.p))));
+  extras.forEach(o => res.append(line("➕ " + o.x.n, money(svp(o.x)))));
   res.append(line("Итого без НДС", r.price != null ? money(r.price + prrP + exSum) : "—", true));
   d.append(res);
   if (pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) d.append(h("div", { class: "note", style: "margin-top:6px;color:#d32f2f" }, "С " + pn.later.from + " ставка ЖД изменится: " + money(r2.price) + " (итого " + money(r2.price + prrP + exSum) + "). До этой даты действует цена выше.")); }
   if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
-  d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
+  if (pd.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + pd.note));
+  if (prrs.length) d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
     h("select", { class: "sel", onchange: e => { calc.pprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.pprr) }, o.x.g.replace(/\s*\(.*$/, "") + " · " + o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))));
   d.append(h("button", { class: "btn ghost", style: "margin:10px 0 4px;padding:6px 12px;font-size:13px", onclick: () => { calc.pexOpen = !calc.pexOpen; draw(); } }, (calc.pexOpen ? "▾" : "▸") + " Допуслуги порта" + (extras.length ? " (выбрано " + extras.length + ")" : "")));
   if (calc.pexOpen) {
@@ -1160,7 +1167,8 @@ function portBlock(draw) {
       if (x.g !== g0) { g0 = x.g; d.append(h("div", { style: "font-weight:600;margin:8px 0 2px;font-size:13px" }, x.g)); }
       const cb = h("input", { type: "checkbox", style: "width:18px;height:18px;flex:none", checked: PEX.has(k) });
       cb.onchange = () => { cb.checked ? PEX.add(k) : PEX.delete(k); draw(); };
-      d.append(h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0" }, cb, h("span", { style: "flex:1" }, x.n), h("span", { style: "white-space:nowrap" }, money(x.p))));
+      if (svp(x) == null) cb.disabled = true;
+      d.append(h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0" + (svp(x) == null ? ";opacity:.5" : "") }, cb, h("span", { style: "flex:1" }, x.n), h("span", { style: "white-space:nowrap" }, svp(x) == null ? "—" : money(svp(x)))));
     });
   }
   d.append(h("div", { class: "note", style: "margin-top:10px" }, "Без НДС. Хранение не включено, 45 фут не считаем. " + (pd.railPeriod ? "ЖД-ставки действуют " + pd.railPeriod + ". " : "") + "Тарифы " + pd.name + (pd.date ? " от " + pd.date : "") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки — от порта до станции назначения."));
