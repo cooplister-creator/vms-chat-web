@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "31.10.2026 · сборка 66";
+const WEB_VERSION = "31.10.2026 · сборка 67";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -958,7 +958,7 @@ function buildAlerts(m) {
 }
 
 /* ---------- расчёт ставки ---------- */
-let calc = { rail: true, freight: true, port: false, pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
+let calc = { rail: true, freight: true, port: false, pport: "", pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
@@ -1083,15 +1083,16 @@ function railBlock(draw) {
   return d;
 }
 
-/* ---------- порт ВСК (Врангель): ЖД от порта + ПРР и услуги терминала ---------- */
+/* ---------- порты: ЖД от порта + ПРР и услуги терминала ---------- */
 let PORT = null, portLoading = false;
 async function loadPort(draw) {
   if (PORT || portLoading) return; portLoading = true;
-  try { PORT = await docsCall("action=port"); } catch (e) { PORT = { err: e.message || "ошибка", kp: [], od: [], port: [] }; }
+  try { PORT = await docsCall("action=port"); } catch (e) { PORT = { err: e.message || "ошибка", ports: [] }; }
   portLoading = false; draw();
 }
 const PSZ = ["20' до 24 т", "20' 24–28 т", "20' свыше 28 т", "40' до 28 т", "40' свыше 28 т"];
 const PEX = new Set();
+const PCHIPS = ["Электроугли", "Шушары", "Заневский пост", "Клещиха", "Екатеринбург-товарный", "Базаиха", "Батарейная", "Ростов-Товарный", "Тольятти", "Омск-Восточный", "Хабаровск-2"];
 function portRail(row, sz, guard) {   // → { price, note }
   const g = guard ? 1 : 0;
   if (sz === 4) {
@@ -1100,65 +1101,75 @@ function portRail(row, sz, guard) {   // → { price, note }
   }
   return { price: row.p[sz * 2 + g], note: "" };
 }
+function portNext(row) {   // → { now: действующие ставки, later: { from, p, p45 } | null }
+  const n = row.next; if (!n) return { now: row, later: null };
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(n.from || ""), t = new Date(); t.setHours(0, 0, 0, 0);
+  const eff = m && new Date(+m[3], +m[2] - 1, +m[1]) <= t;
+  const nr = { p: n.p, p45: n.p45 || row.p45 };
+  return eff ? { now: nr, later: null } : { now: row, later: Object.assign({ from: n.from }, nr) };
+}
 function portBlock(draw) {
   loadPort(draw);
-  const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "⚓ Порт ВСК (Врангель) → станция · ЖД + ПРР"));
-  if (!PORT) { d.append(h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, "Загружаю тарифы порта…")); return d; }
-  if (isAdmin) {
-    const inp = h("input", { type: "file", accept: ".docx,.doc", style: "display:none" });
-    inp.onchange = async () => {
-      const f = inp.files[0]; if (!f) return;
-      if (f.size > 8 * 1024 * 1024) { toast("Файл больше 8 МБ"); return; }
-      toast("Загружаю тарифы порта…");
-      try {
-        const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => no(new Error("Не удалось прочитать файл")); r.readAsDataURL(f); });
-        const tk = await me.getIdToken();
-        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "port_upload", token: tk, name: f.name, mime: f.type, b64 }) });
-        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
-        PORT = null; toast("Готово: тарифы от " + j.date + " · ЖД " + j.kp + " + " + j.od + " станций, услуг порта " + j.port); draw();
-      } catch (e) { toast(e.message || "Не получилось загрузить"); }
-    };
-    d.append(h("div", { style: "margin:6px 0" }, h("button", { class: "btn ghost", style: "padding:5px 12px;font-size:12px", onclick: () => inp.click() }, "📤 Загрузить тарифы порта (Word)"), inp));
+  const d = h("div", { class: "blk" });
+  if (!PORT) { d.append(h("div", { class: "bt" }, "⚓ Порт"), h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, "Загружаю тарифы портов…")); return d; }
+  if (PORT.err) { d.append(h("div", { class: "bt" }, "⚓ Порт"), h("div", { style: "color:#d32f2f;font-size:13px" }, "Не удалось загрузить: " + PORT.err + " ", h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { PORT = null; draw(); } }, "Повторить"))); return d; }
+  const ports = PORT.ports || [];
+  const pd = ports.find(x => x.id === calc.pport);
+  if (!pd) {   // сначала выбираем порт
+    d.append(h("div", { class: "bt" }, "⚓ Выберите порт"));
+    if (!ports.length) d.append(h("div", { style: "color:var(--muted);font-size:13px" }, isAdmin ? "Тарифов портов ещё нет. Прикрепите файл с тарифами Помощнику — он сам разберёт." : "Тарифы портов ещё не загружены."));
+    d.append(h("div", { class: "cityrow" }, ...ports.map(x => h("button", { class: "chip", style: "font-size:15px;padding:10px 18px", onclick: () => { calc.pport = x.id; draw(); } }, "⚓ " + x.name))));
+    if (ports.length) d.append(h("div", { class: "note", style: "margin-top:8px" }, "Тарифы у каждого порта свои. Новые порты появятся здесь после загрузки их тарифов."));
+    return d;
   }
-  if (PORT.err) { d.append(h("div", { style: "color:#d32f2f;font-size:13px" }, "Не удалось загрузить: " + PORT.err, " ", h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { PORT = null; draw(); } }, "Повторить"))); return d; }
-  if (PORT.empty || !PORT.kp.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, isAdmin ? "Тарифов порта ещё нет. Загрузите файл Word с тарифами ВМС ЛАЙН." : "Тарифы порта ещё не загружены.")); return d; }
-  const list = calc.pm === 0 ? PORT.kp : PORT.od;
-  if (!list.some(r => r.st === calc.pst)) calc.pst = list[0].st;
-  const row = list.find(r => r.st === calc.pst);
-  const prrs = PORT.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
-  if (!prrs.some(o => String(o.i) === String(calc.pprr))) { const def = prrs.find(o => o.x.c === "1.1.1") || prrs[0]; calc.pprr = def ? String(def.i) : ""; }
-  d.append(h("div", { class: "ctl2" },
-    seg(["Контейнерный поезд", "Одиночные / группа"], calc.pm, i => { calc.pm = i; draw(); }),
-    h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...list.map(r => h("option", { value: r.st, selected: r.st === calc.pst }, r.st)))),
+  d.append(h("div", { class: "bt", style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" }, h("span", {}, "⚓ Порт " + pd.name + " → станция"),
+    ports.length > 1 ? h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { calc.pport = ""; draw(); } }, "↩ Другой порт") : null));
+  if (!pd.kp.length && !pd.od.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
+  const names = [...new Set(pd.kp.map(r => r.st).concat(pd.od.map(r => r.st)))];
+  if (!names.includes(calc.pst)) calc.pst = names[0];
+  const chips = PCHIPS.filter(c => names.includes(c));
+  d.append(h("div", { class: "cityrow" }, ...chips.map(c => h("button", { class: "chip" + (c === calc.pst ? " on" : ""), onclick: () => { calc.pst = c; draw(); } }, c))),
+    h("div", { class: "ctl2" },
+      h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...names.slice().sort((x, y) => x.localeCompare(y, "ru")).map(c => h("option", { value: c, selected: c === calc.pst }, c)))),
     seg(PSZ, calc.psz, i => { calc.psz = i; draw(); }),
     h("label", { style: "display:flex;align-items:center;gap:8px;margin:6px 0" }, h("input", { type: "checkbox", checked: calc.pg, onchange: e => { calc.pg = e.target.checked; draw(); } }), "С охраной"));
-  const r = portRail(row, calc.psz, calc.pg);
-  const prr = prrs.find(o => String(o.i) === String(calc.pprr));
-  const extras = PORT.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(o.i));
+  const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
+  if (!prrs.some(o => String(o.i) === String(calc.pprr))) { const def = prrs.find(o => o.x.c === "1.1.1") || prrs[0]; calc.pprr = def ? String(def.i) : ""; }
+  const prr = prrs.find(o => String(o.i) === String(calc.pprr)), prrP = prr ? prr.x.p : 0;
+  const extras = pd.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(pd.id + "|" + o.i));
   const exSum = extras.reduce((a, o) => a + o.x.p, 0);
-  const total = (r.price || 0) + (prr ? prr.x.p : 0) + exSum;
-  const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
-  const res = h("div", { class: "rc", style: "display:block" });
-  res.append(line("🚆 ЖД: порт ВСК → " + calc.pst + " · " + PSZ[calc.psz] + (calc.pg ? " · с охраной" : ""), r.price != null ? money(r.price) : "нет данных"));
-  if (prr) res.append(line("⚓ ПРР: " + prr.x.g.replace(/\s*\(.*$/, "") + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), money(prr.x.p)));
-  extras.forEach(o => res.append(line("➕ " + o.x.n, money(o.x.p))));
-  res.append(line("Итого без НДС", r.price != null ? money(total) : "—", true));
-  d.append(res);
-  if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
+  const per = pd.railPeriod ? "ЖД " + pd.railPeriod : (pd.date ? "тарифы от " + pd.date : "");
+  const items = []; let note = "";
+  [["Контейнерный поезд", pd.kp], ["Одиночная отправка / группа вагонов", pd.od]].forEach(([nm, list]) => {
+    const row = list.find(r => r.st === calc.pst); if (!row) return;
+    const pn = portNext(row), r = portRail(pn.now, calc.psz, calc.pg);
+    if (r.price == null) return;
+    if (r.note) note = r.note;
+    let later = null;
+    if (pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) later = { from: pn.later.from, total: r2.price + prrP + exSum }; }
+    items.push({ nm, rail: r.price, total: r.price + prrP + exSum, later });
+  });
+  const col = h("div", {}, h("h2", { class: "v" }, "Без НДС"));
+  if (!items.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
+  items.sort((a, b) => a.total - b.total).forEach((it, i) => col.append(card(i, money(it.total), it.nm, "ЖД " + money(it.rail) + " + ПРР " + money(prrP) + (exSum ? " + допуслуги " + money(exSum) : ""),
+    per + (it.later ? " · с " + it.later.from + ": " + money(it.later.total) : ""), false, "")));
+  d.append(col);
+  if (note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + note));
   d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
     h("select", { class: "sel", onchange: e => { calc.pprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.pprr) }, o.x.g.replace(/\s*\(.*$/, "") + " · " + o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))));
-  d.append(h("button", { class: "btn ghost", style: "margin:10px 0 4px;padding:6px 12px;font-size:13px", onclick: () => { calc.pexOpen = !calc.pexOpen; draw(); } }, (calc.pexOpen ? "▾" : "▸") + " Допуслуги порта" + (PEX.size ? " (выбрано " + PEX.size + ")" : "")));
+  d.append(h("button", { class: "btn ghost", style: "margin:10px 0 4px;padding:6px 12px;font-size:13px", onclick: () => { calc.pexOpen = !calc.pexOpen; draw(); } }, (calc.pexOpen ? "▾" : "▸") + " Допуслуги порта" + (extras.length ? " (выбрано " + extras.length + ")" : "")));
   if (calc.pexOpen) {
     let g0 = null;
-    PORT.port.forEach((x, i) => {
+    pd.port.forEach((x, i) => {
       if (/^Перевалка/i.test(x.g)) return;
+      const k = pd.id + "|" + i;
       if (x.g !== g0) { g0 = x.g; d.append(h("div", { style: "font-weight:600;margin:8px 0 2px;font-size:13px" }, x.g)); }
-      const cb = h("input", { type: "checkbox", style: "width:18px;height:18px;flex:none", checked: PEX.has(i) });
-      cb.onchange = () => { cb.checked ? PEX.add(i) : PEX.delete(i); draw(); };
+      const cb = h("input", { type: "checkbox", style: "width:18px;height:18px;flex:none", checked: PEX.has(k) });
+      cb.onchange = () => { cb.checked ? PEX.add(k) : PEX.delete(k); draw(); };
       d.append(h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0" }, cb, h("span", { style: "flex:1" }, x.n), h("span", { style: "white-space:nowrap" }, money(x.p))));
     });
   }
-  d.append(h("div", { class: "note", style: "margin-top:10px" }, "Без НДС. Хранение не включено, 45 фут не считаем. Тарифы ВМС ЛАЙН от " + (PORT.date || "—") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки указаны от порта до станции назначения."));
+  d.append(h("div", { class: "note", style: "margin-top:10px" }, "Без НДС. Хранение не включено, 45 фут не считаем. Тарифы " + pd.name + (pd.date ? " от " + pd.date : "") + (PORT.updated ? " (загружены " + PORT.updated + ")" : "") + ". ЖД-ставки — от порта до станции назначения."));
   return d;
 }
 /* ---------- фрахт: реальные данные из таблицы «Фрахт» ---------- */
@@ -1607,6 +1618,8 @@ function buildBot(m) {
         if (j.notes && j.notes.length) msg += "\n\n" + j.notes.map(x => "ℹ️ " + x).join("\n");
         msg += "\n\nСтарые периоды остаются до своей даты окончания. Проверьте и нажмите «Применить».";
         BOT.push({ me: false, text: msg, apply: j.previewId });
+      } else if (j.kind === "port") {
+        PORT = null; BOT.push({ me: false, text: j.msg });
       } else if (j.kind === "lib") {
         DOCS = null; BOT.push({ me: false, text: "📁 Сохранил «" + j.name + "» в папку: " + j.path + ". Теперь его можно запросить у меня по названию." });
       } else if (j.kind === "ask") {
