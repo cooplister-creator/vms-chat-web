@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 79";
+const WEB_VERSION = "02.11.2026 · сборка 80";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1158,6 +1158,12 @@ function portTermView(d, pd, draw) {
   res.append(line("🚆 ЖД: " + calc.pterm + " → " + (rl ? rl.station : calc.city) + " · " + TYPE_NAMES[calc.type] + (rl && rl.future ? " · с " + rl.from : ""), noRates ? "ставки СПН (с перемещением из ВСК) будут добавлены" : rl ? money(rl.price) : "нет ставки (НДС " + (calc.pvat ? 22 : 0) + "%)"));
   res.append(line("Итого", noRates ? "—" : rl ? money(prrP + auto + rl.price) : "—", true));
   d.append(res);
+  if (calc.pfut) {
+    const fm = {}; AR.filter(r => r.future && tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).forEach(r => { if (!fm[r.from] || r.price < fm[r.from].price) fm[r.from] = r; });
+    const fl = Object.keys(fm).map(k => fm[k]).filter(r => r !== rl).sort((a, b) => a.fd - b.fd);
+    if (fl.length) fl.forEach(r => d.append(h("div", { style: "margin-top:6px;padding:8px 10px;border-radius:10px;background:#fff4cc;color:#5a3d00;font-size:13px" }, "🔜 С " + r.from + (r.station ? " (" + r.station + ")" : "") + ": ЖД " + money(r.price) + " → итого " + money(prrP + auto + r.price))));
+    else d.append(h("div", { class: "note", style: "margin-top:6px" }, "Будущих ставок для этого терминала, города и типа контейнера нет."));
+  }
   d.append(h("div", { class: "note", style: "margin-top:6px" }, "ПРР — по тарифам порта (НДС как в файле порта). " + (vsk ? "Тариф СПН включает перемещение из ВСК; при весе груза больше 30 т надбавка 5 000 ₽. " : "Авто: " + money(AUTO_T.base) + " без НДС, при брутто больше " + AUTO_T.limit + " т +" + money(AUTO_T.add) + " (весовые рамки). ") + "НДС 22% применяется к авто/надбавке и берётся из ставок ЖД с НДС 22%. Фрахт — в своём блоке."));
   return d;
 }
