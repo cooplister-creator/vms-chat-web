@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 71";
+const WEB_VERSION = "02.11.2026 · сборка 72";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1568,12 +1568,13 @@ function buildBot(m) {
     busy = true; draw();
     try {
       const tk = await me.getIdToken();
-      const isFr = BOT.some(b => b.apply === id && b.fr);
-      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: isFr ? "freight_apply" : "rates_apply", token: tk, previewId: id }) });
+      const isFr = BOT.some(b => b.apply === id && b.fr), isPort = BOT.some(b => b.apply === id && b.port);
+      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: isPort ? "port_apply" : isFr ? "freight_apply" : "rates_apply", token: tk, previewId: id }) });
       const j = JSON.parse(await resp.text());
       if (j.error) throw new Error(j.error);
       BOT.forEach(b => { if (b.apply === id) b.applied = "✅ Применено"; });
-      if (isFr) { FR = null; BOT.push({ me: false, text: "✅ Фрахт обновлён (" + j.contractor + "): теперь " + j.total + " предложений, заменено старых " + j.replaced + ". У вас калькулятор уже показывает новые цены, у остальных они появятся после обновления страницы или нового захода на сайт." }); }
+      if (isPort) { PORT = null; BOT.push({ me: false, text: "✅ Тарифы порта применены: " + j.port + " (КП " + j.kp + " ст., одиночные " + j.od + " ст., услуг " + j.svc + "). В калькуляторе «⚓ Порт» уже новые цены; у остальных появятся после обновления страницы." }); }
+      else if (isFr) { FR = null; BOT.push({ me: false, text: "✅ Фрахт обновлён (" + j.contractor + "): теперь " + j.total + " предложений, заменено старых " + j.replaced + ". У вас калькулятор уже показывает новые цены, у остальных они появятся после обновления страницы или нового захода на сайт." }); }
       else { ratesLoaded = false; loadRates(() => draw());
       BOT.push({ me: false, text: "✅ Ставки обновлены (" + j.contractor + "): добавлено " + j.added + ", обновлено " + j.updated + ", закрыто старых периодов " + j.closed + ". У вас калькулятор уже использует новые ставки, у остальных они появятся после обновления страницы или нового захода на сайт." }); }
     } catch (e) { BOT.forEach(b => { if (b.apply === id) b.applied = /устарел/.test(e.message || "") ? "Предпросмотр устарел" : ""; }); BOT.push({ me: false, text: "Не получилось применить: " + (e.message || "ошибка") }); }
@@ -1627,7 +1628,8 @@ function buildBot(m) {
         msg += "\n\nСтарые периоды остаются до своей даты окончания. Проверьте и нажмите «Применить».";
         BOT.push({ me: false, text: msg, apply: j.previewId });
       } else if (j.kind === "port") {
-        PORT = null; BOT.push({ me: false, text: j.msg });
+        BOT.push(j.previewId ? { me: false, text: j.msg, apply: j.previewId, port: true } : { me: false, text: j.msg });
+        if (!j.previewId) PORT = null;
       } else if (j.kind === "lib") {
         DOCS = null; BOT.push({ me: false, text: "📁 Сохранил «" + j.name + "» в папку: " + j.path + ". Теперь его можно запросить у меня по названию." });
       } else if (j.kind === "ask") {
