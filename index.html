@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 77";
+const WEB_VERSION = "02.11.2026 · сборка 79";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -958,7 +958,7 @@ function buildAlerts(m) {
 }
 
 /* ---------- расчёт ставки ---------- */
-let calc = { pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
+let calc = { pfut: false, tprr: "", pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
@@ -1118,41 +1118,47 @@ function portNext(row) {   // → { now: действующие ставки, la
 const AUTO_T = { base: 20000, limit: 20, add: 10000 };
 function portTermView(d, pd, draw) {
   if (!ratesLoaded) loadRates(draw);
-  const AR = activeRates().filter(r => !r.arch && !r.future);
+  const vsk = pd.id === "vsk", SPN = "СУХОЙ ПОРТ НАХОДКА (СПН)";
+  const AR = activeRates().filter(r => !r.arch && (calc.pfut || !r.future) && (!vsk || /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor)));
   const tkey = r => r.contractor;
-  const terms = [...new Set(AR.map(tkey))].sort((a, b) => a.localeCompare(b, "ru"));
+  let terms = [...new Set(AR.map(tkey))].sort((a, b) => a.localeCompare(b, "ru"));
+  if (vsk && !terms.length) terms = [SPN];
   const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   if (!terms.includes(calc.pterm)) calc.pterm = terms[0] || "";
   if (!cities.includes(calc.city)) calc.city = cities.includes("Москва") ? "Москва" : (cities[0] || "");
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const lab = t => h("div", { style: "margin:10px 0 4px;font-weight:600;font-size:13px" }, t);
   // ПРР порта
-  const noPrr = pd.id === "vmtp";
   const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
-  if (calc.pprrPort !== pd.id) { calc.pprrPort = pd.id; calc.pprr = ""; }
-  if (!prrs.some(o => String(o.i) === String(calc.pprr)) && !(noPrr && calc.pprr === "none")) { const def = prrs.find(o => o.x.c === (pd.prr || "1.1.1")) || prrs[0]; calc.pprr = noPrr ? "none" : (def ? String(def.i) : ""); }
-  const prr = prrs.find(o => String(o.i) === String(calc.pprr)), prrP = prr ? prr.x.p : 0;
+  if (calc.tprrPort !== pd.id) { calc.tprrPort = pd.id; calc.tprr = ""; }
+  if (!prrs.some(o => String(o.i) === String(calc.tprr))) { const def = prrs.find(o => o.x.c === (pd.prr || "1.1.1")) || prrs[0]; calc.tprr = def ? String(def.i) : ""; }
+  const prr = prrs.find(o => String(o.i) === String(calc.tprr)), prrP = prr ? prr.x.p : 0;
   // авто
-  const gross = parseFloat(String(calc.pgross).replace(",", ".")), heavy = gross > AUTO_T.limit;
-  const k = calc.pvat ? 1.22 : 1, autoBase = Math.round(AUTO_T.base * k), autoAdd = heavy ? Math.round(AUTO_T.add * k) : 0, auto = autoBase + autoAdd;
+  const gross = parseFloat(String(calc.pgross).replace(",", ".")), lim = vsk ? 30 : AUTO_T.limit, heavy = gross > lim;
+  const k = calc.pvat ? 1.22 : 1, autoBase = vsk ? 0 : Math.round(AUTO_T.base * k), autoAdd = heavy ? Math.round((vsk ? 5000 : AUTO_T.add) * k) : 0, auto = autoBase + autoAdd;
   // ЖД от терминала
-  const rl = AR.filter(r => tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).sort((a, b) => a.price - b.price)[0];
+  const rl = AR.filter(r => tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).sort((a, b) => (a.future ? 1 : 0) - (b.future ? 1 : 0) || a.price - b.price)[0];
   d.append(
     lab("Терминал / контрагент (из блока «ЖД»)"), h("select", { class: "sel", onchange: e => { calc.pterm = e.target.value; draw(); } }, ...terms.map(t => h("option", { value: t, selected: t === calc.pterm }, t))),
     lab("Город назначения"), h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c))),
     seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); }),
     h("div", { style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 4px" },
-      h("span", { style: "font-weight:600;font-size:13px" }, "Брутто контейнера, т"),
-      h("input", { class: "sel", type: "number", inputmode: "decimal", step: "0.1", min: "0", value: calc.pgross, placeholder: "напр. 22", style: "width:110px", onchange: e => { calc.pgross = e.target.value; draw(); } })),
-    seg(["НДС 0%", "НДС 22%"], calc.pvat, i => { calc.pvat = i; draw(); }));
+      h("span", { style: "font-weight:600;font-size:13px" }, vsk ? "Вес груза, т" : "Брутто контейнера, т"),
+      h("input", { class: "sel", type: "number", inputmode: "decimal", step: "0.1", min: "0", value: calc.pgross, placeholder: vsk ? "напр. 28" : "напр. 22", style: "width:110px", onchange: e => { calc.pgross = e.target.value; draw(); } })),
+    seg(["НДС 0%", "НДС 22%"], calc.pvat, i => { calc.pvat = i; draw(); }),
+    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.pfut, onchange: e => { calc.pfut = e.target.checked; draw(); } }), "Показывать будущие ставки"),
+    prrs.length ? lab("Вид ПРР в порту") : null,
+    prrs.length ? h("select", { class: "sel", onchange: e => { calc.tprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.tprr) }, o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))) : null);
   const res = h("div", { class: "rc", style: "display:block;margin-top:10px" });
   if (prr) res.append(line("⚓ ПРР в порту: " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), money(prr.x.p)));
   else res.append(line("⚓ ПРР в порту", "не включён"));
-  res.append(line("🚛 Авто порт → терминал" + (heavy ? " (+" + money(autoAdd) + " брутто > " + AUTO_T.limit + " т)" : ""), money(auto)));
-  res.append(line("🚆 ЖД: " + calc.pterm + " → " + (rl ? rl.station : calc.city) + " · " + TYPE_NAMES[calc.type], rl ? money(rl.price) : "нет ставки (НДС " + (calc.pvat ? 22 : 0) + "%)"));
-  res.append(line("Итого", rl ? money(prrP + auto + rl.price) : "—", true));
+  const noRates = vsk && !AR.length;
+  if (vsk) { if (heavy) res.append(line("⚖️ Надбавка: вес груза больше 30 т", money(autoAdd))); }
+  else res.append(line("🚛 Авто порт → терминал" + (heavy ? " (+" + money(autoAdd) + " брутто > " + AUTO_T.limit + " т)" : ""), money(auto)));
+  res.append(line("🚆 ЖД: " + calc.pterm + " → " + (rl ? rl.station : calc.city) + " · " + TYPE_NAMES[calc.type] + (rl && rl.future ? " · с " + rl.from : ""), noRates ? "ставки СПН (с перемещением из ВСК) будут добавлены" : rl ? money(rl.price) : "нет ставки (НДС " + (calc.pvat ? 22 : 0) + "%)"));
+  res.append(line("Итого", noRates ? "—" : rl ? money(prrP + auto + rl.price) : "—", true));
   d.append(res);
-  d.append(h("div", { class: "note", style: "margin-top:6px" }, "ПРР — по тарифам порта (НДС как в файле порта). Авто: " + money(AUTO_T.base) + " без НДС, при брутто больше " + AUTO_T.limit + " т +" + money(AUTO_T.add) + " (весовые рамки). НДС 22% применяется к авто и берётся из ставок ЖД с НДС 22%. Фрахт — в своём блоке."));
+  d.append(h("div", { class: "note", style: "margin-top:6px" }, "ПРР — по тарифам порта (НДС как в файле порта). " + (vsk ? "Тариф СПН включает перемещение из ВСК; при весе груза больше 30 т надбавка 5 000 ₽. " : "Авто: " + money(AUTO_T.base) + " без НДС, при брутто больше " + AUTO_T.limit + " т +" + money(AUTO_T.add) + " (весовые рамки). ") + "НДС 22% применяется к авто/надбавке и берётся из ставок ЖД с НДС 22%. Фрахт — в своём блоке."));
   return d;
 }
 function portBlock(draw) {
