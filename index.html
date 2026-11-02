@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 84";
+const WEB_VERSION = "02.11.2026 · сборка 85";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1005,7 +1005,7 @@ async function loadRates(draw) {
   ratesLoaded = true;
   try {
     const j = await docsCall("action=rates");
-    if (j.rates && j.rates.length) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
+    if (Array.isArray(j.rates)) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
   } catch (e) { console.warn("rates", e); }
 }
 let SHOWARCH = false; const SEL = new Set();
@@ -1033,22 +1033,7 @@ function railBlock(draw) {
       seg(TYPE_NAMES, calc.type, i => { calc.type = i; draw(); })));
   if (isAdmin) {
     const nA = activeRates().filter(r => r.arch).length;
-    const wipe = async () => {
-      const rail = confirm("Очистить ВСЕ ЖД-ставки (все контрагенты)?\nOK — да, Отмена — нет");
-      const port = confirm("Очистить ВСЕ ставки и услуги портов (все порты)?\nOK — да, Отмена — нет");
-      if (!rail && !port) return;
-      if ((prompt("Будет очищено: " + [rail ? "ЖД-ставки" : "", port ? "порты" : ""].filter(Boolean).join(" и ") + ". Копия сохранится на Диске.\nВведите слово ОЧИСТИТЬ") || "").trim() !== "ОЧИСТИТЬ") { toast("Отменено"); return; }
-      try {
-        const tk = await me.getIdToken();
-        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe", token: tk, rail, port, word: "ОЧИСТИТЬ" }) });
-        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
-        RATES = rail ? [] : RATES; PORT = null; ratesLoaded = false;
-        alert("Готово. ЖД-строк удалено: " + j.rail + ", портов очищено: " + j.ports + ".\nКопии на Диске: " + j.backups.join(", ") + "\nОбновите страницу и загрузите новые файлы Помощнику.");
-        draw();
-      } catch (e) { toast(e.message || "Не получилось очистить"); }
-    };
     const bar = h("div", { style: "display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 2px" },
-      h("button", { class: "btn ghost", style: "padding:5px 12px;font-size:12px;color:#c0392b", onclick: wipe }, "🧹 Очистить все ставки"),
       h("button", { class: "btn ghost", style: "padding:5px 12px;font-size:12px", onclick: () => { SHOWARCH = !SHOWARCH; if (!SHOWARCH) SEL.clear(); draw(); } }, (SHOWARCH ? "Убрать архивные ставки" : "Показать архивные ставки") + " (" + nA + ")"));
     if (SHOWARCH && SEL.size) bar.append(h("button", { class: "btn", style: "background:#d32f2f;color:#fff", onclick: async () => {
       const cn = [...new Set(activeRates().filter(r => r.arch && SEL.has(rkey(r))).map(r => r.contractor))];
@@ -1105,7 +1090,7 @@ function railBlock(draw) {
 }
 
 /* ---------- порты: ЖД от порта + ПРР и услуги терминала ---------- */
-let PORT = null, portLoading = false;
+let PORT = null, portLoading = false, WIPE_ASK = 0;
 async function loadPort(draw) {
   if (PORT || portLoading) return; portLoading = true;
   try { PORT = await docsCall("action=port"); } catch (e) { PORT = { err: e.message || "ошибка", ports: [] }; }
@@ -1196,7 +1181,7 @@ function portBlock(draw) {
   const d = h("div", { class: "blk" });
   if (!PORT) { d.append(h("div", { class: "bt" }, "⚓ Порт"), h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, "Загружаю тарифы портов…")); return d; }
   if (PORT.err) { d.append(h("div", { class: "bt" }, "⚓ Порт"), h("div", { style: "color:#d32f2f;font-size:13px" }, "Не удалось загрузить: " + PORT.err + " ", h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { PORT = null; draw(); } }, "Повторить"))); return d; }
-  const ports = PORT.ports || [];
+  const ports = (PORT.ports || []).filter(x => (x.kp || []).length || (x.od || []).length || (x.wg || []).length || (x.port || []).length);
   const pd = ports.find(x => x.id === calc.pport);
   if (!pd) {   // сначала выбираем порт
     d.append(h("div", { class: "bt" }, "⚓ Выберите порт"));
@@ -1949,6 +1934,19 @@ function buildBot(m) {
         IDEAS = IDEAS.filter(d => !pick.includes(d)); BOT.push({ me: false, text: "✅ Отработано: " + pick.length + ". Осталось в списке: " + IDEAS.length + ". Посмотреть отработанные: «отработанные»." }); }
       catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/permission/i.test(e.message || "") ? " (нужно обновить правила Firestore)" : "") }); }
       draw(); return true; }
+    if (/^очистить\s+вс[её]$/.test(n) && WIPE_ASK && Date.now() - WIPE_ASK < 180000) { BOT.push({ me: true, text: q }); WIPE_ASK = 0;
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      try { const tk = await me.getIdToken();
+        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe", token: tk, rail: true, port: true, word: "ОЧИСТИТЬ" }) });
+        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+        RATES = []; PORT = null; ratesLoaded = true;
+        BOT.push({ me: false, text: "🧹 Всё очищено: ЖД-ставок удалено " + j.rail + ", портов обнулено " + j.ports + ". Калькулятор пуст до новой загрузки. Копии на Диске: " + j.backups.join(", ") + ". Теперь прикрепляйте файлы по одному и нажимайте «Применить»." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось очистить: " + (e.message || "ошибка") }); }
+      draw(); return true; }
+    if (/^(очист\S*|удали\S*|сотри\S*|сбрось\S*)\s+(вс[её]\s+)?(ставк|тариф|жд|порт|прр)/.test(n) && /(вс[её]|тариф|ставк)/.test(n) && !/предложени|отработан/.test(n)) { BOT.push({ me: true, text: q });
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      WIPE_ASK = Date.now();
+      BOT.push({ me: false, text: "⚠️ Это удалит ВСЕ ЖД-ставки, ВСЕ ПРР и услуги и ВСЕ порты. Калькулятор будет пустым до новой загрузки. Перед этим на Диске сохранится копия.\nЧтобы подтвердить, напишите: очистить всё (в течение 3 минут)." }); draw(); return true; }
     if (/^очист\S*\s+(предложени|отработан)/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       try { const onlyDone = /отработан/.test(n); const s = await db.collection("botIdeas").limit(300).get(); const del = s.docs.filter(d => !onlyDone || d.data().status === "done");
