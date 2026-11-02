@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 72";
+const WEB_VERSION = "02.11.2026 · сборка 74";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1130,11 +1130,13 @@ function portBlock(draw) {
   }
   d.append(h("div", { class: "bt", style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" }, h("span", {}, "⚓ Порт " + pd.name + " → станция"),
     h("button", { class: "btn ghost", style: "padding:3px 10px;font-size:12px", onclick: () => { calc.pport = ""; draw(); } }, "↩ Выбрать порт")));
-  if (!pd.kp.length && !pd.od.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
-  const list = calc.pm === 0 ? pd.kp : pd.od;
+  const wgL = pd.wg || [];
+  if (!pd.kp.length && !pd.od.length && !wgL.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
+  if (calc.pm > (wgL.length ? 2 : 1)) calc.pm = 0;
+  const list = [pd.kp, pd.od, wgL][calc.pm] || pd.kp;
   if (!list.some(r => r.st === calc.pst)) calc.pst = list.length ? list[0].st : "";
   d.append(h("div", { class: "ctl2" },
-    seg(pd.labels ? [pd.labels.kp, pd.labels.od] : ["Контейнерный поезд", "Одиночные / группа"], calc.pm, i => { calc.pm = i; draw(); }),
+    seg((pd.labels ? [pd.labels.kp, pd.labels.od] : ["Контейнерный поезд", "Одиночные / группа"]).concat(wgL.length ? [(pd.labels && pd.labels.wg) || "Повагонная отправка"] : []), calc.pm, i => { calc.pm = i; draw(); }),
     h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...list.map(r => h("option", { value: r.st, selected: r.st === calc.pst }, r.st)))),
     seg(PSZ, calc.psz, i => { calc.psz = i; draw(); }),
     h("label", { style: "display:flex;align-items:center;gap:8px;margin:6px 0" }, h("input", { type: "checkbox", checked: calc.pg, onchange: e => { calc.pg = e.target.checked; draw(); } }), "С охраной"));
@@ -1148,14 +1150,14 @@ function portBlock(draw) {
   const pn = portNext(row), r = portRail(pn.now, calc.psz, calc.pg);
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const res = h("div", { class: "rc", style: "display:block" });
-  const pfiles = pd.files || [], mk = calc.pm === 0 ? "kp" : "od";
+  const pfiles = pd.files || [], mk = ["kp", "od", "wg"][calc.pm];
   const fbtn = f => h("button", { title: "Открыть файл: " + f.t + (f.d ? " (загружен " + f.d + ")" : ""), style: "border:0;background:transparent;font-size:15px;line-height:1;padding:2px 4px;opacity:.75;cursor:pointer;flex:none", onclick: e => { e.stopPropagation(); openRateFile(f.id); } }, "📄");
   const railF = pfiles.filter(f => (f.w === "rail" || f.w === "both") && (f.m === "both" || f.m === "" || f.m === mk)), svcF = pfiles.filter(f => f.w === "svc" || f.w === "both");
   res.append(line(h("span", {}, "🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (calc.pg ? " · с охраной" : ""), ...railF.map(fbtn)), r.price != null ? money(r.price) : "нет данных"));
   const gl = x => pd.vat ? x.g : x.g.replace(/\s*\(.*$/, "");
   if (prr) res.append(line(h("span", {}, "⚓ ПРР: " + gl(prr.x) + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), ...svcF.map(fbtn)), money(prr.x.p)));
   extras.forEach(o => res.append(line("➕ " + o.x.n, money(svp(o.x)))));
-  res.append(line("Итого " + (pd.vat ? pd.vat[calc.pm === 0 ? "kp" : "od"] : "без НДС"), r.price != null ? money(r.price + prrP + exSum) : "—", true));
+  res.append(line("Итого " + (pd.vat ? (pd.vat[mk] || "") : "без НДС"), r.price != null ? money(r.price + prrP + exSum) : "—", true));
   d.append(res);
   if (pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) d.append(h("div", { class: "note", style: "margin-top:6px;color:#d32f2f" }, "С " + pn.later.from + " ставка ЖД изменится: " + money(r2.price) + " (итого " + money(r2.price + prrP + exSum) + "). До этой даты действует цена выше.")); }
   if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
