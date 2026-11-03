@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 89";
+const WEB_VERSION = "03.11.2026 · сборка 91";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1098,6 +1098,7 @@ async function loadPort(draw) {
 }
 const PSZ = ["20' до 24 т", "20' 24–28 т", "20' свыше 28 т", "40' до 28 т", "40' свыше 28 т"];
 const PEX = new Set();
+const NO_PRR = new Set(["vmtp", "vmrp"]);   // порты, у которых ставка уже включает ПРР
 const PCHIPS = ["Электроугли", "Шушары", "Заневский пост", "Клещиха", "Екатеринбург-товарный", "Базаиха", "Батарейная", "Ростов-Товарный", "Тольятти", "Омск-Восточный", "Хабаровск-2"];
 const svp = x => (calc.psz >= 3 && x.p40 != null) ? x.p40 : x.p;   // цена услуги порта: для 40' своя, если указана
 function portRail(row, sz, guard) {   // → { price, note }
@@ -1209,13 +1210,12 @@ function portCompare(ports, draw) {
       h("select", { class: "sel", title: "Город назначения", onchange: e => { calc.cc = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.cc }, (MAIN_CITIES.includes(c) ? "★ " : "") + c)))),
     seg(PSZ, calc.csz, i => { calc.csz = i; draw(); }),
     h("div", { style: "display:flex;gap:16px;flex-wrap:wrap;margin:6px 0" },
-      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной"),
-      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cprr, onchange: e => { calc.cprr = e.target.checked; draw(); } }), "С ПРР порта")));
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной")));
   const out = [];
   ports.forEach(pd => {
     const prrs = pd.port.filter(x => /^Перевалка/i.test(x.g));
-    const prrX = pd.id === "vmtp" ? null : (prrs.find(x => x.c === (pd.prr || "1.1.1")) || prrs[0]);
-    const prrP = calc.cprr && prrX ? prrX.p : 0;
+    const prrX = NO_PRR.has(pd.id) ? null : (prrs.find(x => x.c === (pd.prr || "1.1.1")) || prrs[0]);
+    const prrP = 0;   // ПРР в сравнении пока не учитываем
     rowsOf(pd).forEach(([mk, list], vi) => {
       let best = null;
       list.filter(r => stCity(r.st) === calc.cc).forEach(r => { const pr = portRail(portNext(r).now, calc.csz, calc.cg).price; if (pr != null && (!best || pr < best.pr)) best = { r, pr }; });
@@ -1232,7 +1232,7 @@ function portCompare(ports, draw) {
     el.onclick = () => { calc.pport = o.pd.id; calc.pm = ["kp", "od", "wg"].indexOf(o.mk); calc.pst = o.st; calc.psz = calc.csz; calc.pg = calc.cg; calc.pdest = 0; draw(); };
     d.append(el);
   });
-  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. ПРР — вид по умолчанию (у ВМТП ставка уже включает ПРР). НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
+  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. Только ставка ЖД, без ПРР. НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
   return d;
 }
 function portBlock(draw) {
@@ -1267,7 +1267,7 @@ function portBlock(draw) {
   if (!list.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px;margin:8px 0" }, "Для этого вида отправки ставок пока нет.")); return d; }
   const row = list.find(r => r.st === calc.pst);
   const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
-  const noPrr = pd.id === "vmtp";
+  const noPrr = NO_PRR.has(pd.id);
   if (calc.pprrPort !== pd.id) { calc.pprrPort = pd.id; calc.pprr = ""; }
   if (!prrs.some(o => String(o.i) === String(calc.pprr)) && !(noPrr && calc.pprr === "none")) { const def = prrs.find(o => o.x.c === (pd.prr || "1.1.1")) || prrs[0]; calc.pprr = noPrr ? "none" : (def ? String(def.i) : ""); }
   const prr = prrs.find(o => String(o.i) === String(calc.pprr)), prrP = prr ? prr.x.p : 0;
@@ -1289,7 +1289,7 @@ function portBlock(draw) {
   if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
   if (pd.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + pd.note));
   if (prrs.length) d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
-    h("select", { class: "sel", onchange: e => { calc.pprr = e.target.value; draw(); } }, ...(noPrr ? [h("option", { value: "none", selected: calc.pprr === "none" }, "Без ПРР (ставка ФЕСКО уже включает)")] : []), ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.pprr) }, gl(o.x) + " · " + o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))));
+    h("select", { class: "sel", onchange: e => { calc.pprr = e.target.value; draw(); } }, ...(noPrr ? [h("option", { value: "none", selected: calc.pprr === "none" }, "Без ПРР (ставка порта уже включает)")] : []), ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.pprr) }, gl(o.x) + " · " + o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))));
   d.append(h("button", { class: "btn ghost", style: "margin:10px 0 4px;padding:6px 12px;font-size:13px", onclick: () => { calc.pexOpen = !calc.pexOpen; draw(); } }, (calc.pexOpen ? "▾" : "▸") + " Допуслуги порта" + (extras.length ? " (выбрано " + extras.length + ")" : "")));
   if (calc.pexOpen) {
     let g0 = null;
