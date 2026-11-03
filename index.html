@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 92";
+const WEB_VERSION = "03.11.2026 · сборка 93";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1017,7 +1017,10 @@ function activeRates() {
   return a;
 }
 const MAIN_CITIES = ["Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Красноярск", "Иркутск", "Казань", "Ростов-на-Дону", "Краснодар", "Самара", "Челябинск", "Омск"];
-const rgPrice = r => money(r.price + (calc.rg && r.guard ? r.guard : 0));
+const RADD = { prr: 15000, auto: 20000, heavy: 10000, heavyRe: /АТК|ЮНИОН/i };   // ПРР + авто — всем; надбавка за вес >20 т — только этим терминалам
+const radd = r => { const k = r.vat === 22 ? 1.22 : 1; return Math.round((calc.radd ? RADD.prr + RADD.auto : 0) * k + (calc.rheavy && RADD.heavyRe.test(r.contractor) ? RADD.heavy * k : 0)); };
+const rgNum = r => r.price + (calc.rg && r.guard ? r.guard : 0) + radd(r);
+const rgPrice = r => money(rgNum(r));
 const rgSt = r => r.station + (calc.rg ? (r.guard ? " · +охрана " + money(r.guard) + (r.gvat ? " (НДС " + r.gvat + "%)" : "") : " · охрана не указана") : "");
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
@@ -1070,11 +1073,13 @@ function railBlock(draw) {
       d.append(box);
     }
   }
-  d.append(h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rg, onchange: e => { calc.rg = e.target.checked; draw(); } }), "С охраной (где охрана указана в файле)"));
+  d.append(h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rg, onchange: e => { calc.rg = e.target.checked; draw(); } }), "С охраной (где охрана указана в файле)"),
+    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.radd, onchange: e => { calc.radd = e.target.checked; draw(); } }), "ПРР + авто (+" + money(RADD.prr + RADD.auto) + ")"),
+    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rheavy, onchange: e => { calc.rheavy = e.target.checked; draw(); } }), "Вес больше 20 т (+" + money(RADD.heavy) + " к АТК и ЮНИОН)"));
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
-    const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : a.price - b.price));
+    const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : rgNum(a) - rgNum(b)));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
     list.forEach((r, i) => { if (!r.arch) { col.append(card(i, rgPrice(r), r.contractor, rgSt(r), per(r), r.future, r.file)); return; }
       const k = rkey(r), cb = h("input", { type: "checkbox", style: "width:20px;height:20px;margin:0 10px 0 0;flex:none" });
@@ -1085,7 +1090,7 @@ function railBlock(draw) {
       el.style.alignItems = "center"; el.prepend(cb); col.append(el); });
     vg.append(col);
   });
-  d.append(vg, h("div", { class: "note" }, "Без ВОХР, ПРР и надбавок. Обновлено: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента. Новые ставки появляются после обновления страницы или нового захода на сайт."));
+  d.append(vg, h("div", { class: "note" }, "Без ВОХР, ПРР и надбавок, если галочки выше не включены. ПРР " + money(RADD.prr) + " и авто " + money(RADD.auto) + " указаны без НДС, в колонке 22% — с НДС 22%. Обновлено: " + TARIFF_UPDATED + ". Сроки уточняйте у контрагента. Новые ставки появляются после обновления страницы или нового захода на сайт."));
   return d;
 }
 
@@ -1210,13 +1215,12 @@ function portCompare(ports, draw) {
       h("select", { class: "sel", title: "Город назначения", onchange: e => { calc.cc = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.cc }, (MAIN_CITIES.includes(c) ? "★ " : "") + c)))),
     seg(PSZ, calc.csz, i => { calc.csz = i; draw(); }),
     h("div", { style: "display:flex;gap:16px;flex-wrap:wrap;margin:6px 0" },
-      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной"),
-      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cprr, onchange: e => { calc.cprr = e.target.checked; draw(); } }), "С ПРР порта")));
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной")));
   const out = [];
   ports.forEach(pd => {
     const prrs = pd.port.filter(x => /^Перевалка/i.test(x.g));
     const prrX = NO_PRR.has(pd.id) ? null : (prrs.find(x => x.c === (pd.prr || "1.1.1")) || prrs[0]);
-    const incl = NO_PRR.has(pd.id), prrP = calc.cprr && prrX ? prrX.p : 0;
+    const incl = NO_PRR.has(pd.id), prrP = prrX ? prrX.p : 0;
     rowsOf(pd).forEach(([mk, list], vi) => {
       let best = null;
       list.filter(r => stCity(r.st) === calc.cc).forEach(r => { const pr = portRail(portNext(r).now, calc.csz, calc.cg).price; if (pr != null && (!best || pr < best.pr)) best = { r, pr }; });
@@ -1233,7 +1237,7 @@ function portCompare(ports, draw) {
     el.onclick = () => { calc.pport = o.pd.id; calc.pm = ["kp", "od", "wg"].indexOf(o.mk); calc.pst = o.st; calc.psz = calc.csz; calc.pg = calc.cg; calc.pdest = 0; draw(); };
     d.append(el);
   });
-  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. ПРР — вид по умолчанию, добавляется там, где он не входит в ставку (у ВМТП и ВМРП ПРР уже включён). НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
+  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. ПРР всегда в итоге: вид по умолчанию добавляется там, где он не входит в ставку (у ВМТП и ВМРП уже включён). НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
   return d;
 }
 function portBlock(draw) {
