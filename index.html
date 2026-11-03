@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 91";
+const WEB_VERSION = "03.11.2026 · сборка 92";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1210,29 +1210,30 @@ function portCompare(ports, draw) {
       h("select", { class: "sel", title: "Город назначения", onchange: e => { calc.cc = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.cc }, (MAIN_CITIES.includes(c) ? "★ " : "") + c)))),
     seg(PSZ, calc.csz, i => { calc.csz = i; draw(); }),
     h("div", { style: "display:flex;gap:16px;flex-wrap:wrap;margin:6px 0" },
-      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной")));
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной"),
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cprr, onchange: e => { calc.cprr = e.target.checked; draw(); } }), "С ПРР порта")));
   const out = [];
   ports.forEach(pd => {
     const prrs = pd.port.filter(x => /^Перевалка/i.test(x.g));
     const prrX = NO_PRR.has(pd.id) ? null : (prrs.find(x => x.c === (pd.prr || "1.1.1")) || prrs[0]);
-    const prrP = 0;   // ПРР в сравнении пока не учитываем
+    const incl = NO_PRR.has(pd.id), prrP = calc.cprr && prrX ? prrX.p : 0;
     rowsOf(pd).forEach(([mk, list], vi) => {
       let best = null;
       list.filter(r => stCity(r.st) === calc.cc).forEach(r => { const pr = portRail(portNext(r).now, calc.csz, calc.cg).price; if (pr != null && (!best || pr < best.pr)) best = { r, pr }; });
       if (!best) return;
       const lab = pd.labels && pd.labels[mk] ? pd.labels[mk] : { kp: "Контейнерный поезд", od: "Одиночные / группа", wg: "Повагонная отправка" }[mk];
-      out.push({ pd, mk, st: best.r.st, rail: best.pr, prr: prrP, tot: best.pr + prrP, lab, vat: pd.vat ? (pd.vat[mk] || "") : "без НДС" });
+      out.push({ pd, mk, incl, st: best.r.st, rail: best.pr, prr: prrP, tot: best.pr + prrP, lab, vat: pd.vat ? (pd.vat[mk] || "") : "без НДС" });
     });
   });
   out.sort((a, b) => a.tot - b.tot);
   if (!out.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px;padding:6px 0" }, "Для города «" + calc.cc + "» и этого типоразмера ставок в портах нет.")); return d; }
   out.forEach((o, i) => {
-    const el = card(i, money(o.tot), o.pd.name + " · " + o.lab, o.st + " · " + o.vat, "ЖД " + money(o.rail) + (o.prr ? " + ПРР " + money(o.prr) : ""), false, null);
+    const el = card(i, money(o.tot), o.pd.name + " · " + o.lab, o.st + " · " + o.vat, "ЖД " + money(o.rail) + (o.incl ? " · ПРР включён в ставку" : o.prr ? " + ПРР " + money(o.prr) : ""), false, null);
     el.style.cursor = "pointer"; el.title = "Открыть расчёт по порту";
     el.onclick = () => { calc.pport = o.pd.id; calc.pm = ["kp", "od", "wg"].indexOf(o.mk); calc.pst = o.st; calc.psz = calc.csz; calc.pg = calc.cg; calc.pdest = 0; draw(); };
     d.append(el);
   });
-  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. Только ставка ЖД, без ПРР. НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
+  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. ПРР — вид по умолчанию, добавляется там, где он не входит в ставку (у ВМТП и ВМРП ПРР уже включён). НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
   return d;
 }
 function portBlock(draw) {
@@ -1281,6 +1282,7 @@ function portBlock(draw) {
   const railF = pfiles.filter(f => (f.w === "rail" || f.w === "both") && (f.m === "both" || f.m === "" || f.m === mk)), svcF = pfiles.filter(f => f.w === "svc" || f.w === "both");
   res.append(line(h("span", {}, "🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (calc.pg ? " · с охраной" : ""), ...railF.map(fbtn)), r.price != null ? money(r.price) : "нет данных"));
   const gl = x => pd.vat ? x.g : x.g.replace(/\s*\(.*$/, "");
+  if (noPrr) res.append(line("⚓ ПРР", "включён в ставку"));
   if (prr) res.append(line(h("span", {}, "⚓ ПРР: " + gl(prr.x) + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), ...svcF.map(fbtn)), money(prr.x.p)));
   extras.forEach(o => res.append(line("➕ " + o.x.n, money(svp(o.x)))));
   res.append(line("Итого " + (pd.vat ? (pd.vat[mk] || "") : "без НДС"), r.price != null ? money(r.price + prrP + exSum) : "—", true));
