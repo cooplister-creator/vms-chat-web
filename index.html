@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 87";
+const WEB_VERSION = "02.11.2026 · сборка 88";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1143,7 +1143,9 @@ function portTermView(d, pd, draw) {
   const gross = parseFloat(String(calc.pgross).replace(",", ".")), lim = vsk ? 30 : AUTO_T.limit, heavy = gross > lim;
   const k = calc.pvat ? 1.22 : 1, autoBase = vsk ? 0 : Math.round(AUTO_T.base * k), autoAdd = heavy ? Math.round((vsk ? 5000 : AUTO_T.add) * k) : 0, auto = autoBase + autoAdd;
   // ЖД от терминала
-  const rl = AR.filter(r => tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).sort((a, b) => (a.future ? 1 : 0) - (b.future ? 1 : 0) || a.price - b.price)[0];
+  const rls = AR.filter(r => tkey(r) === calc.pterm && r.city === calc.city && r.type === calc.type && r.vat === (calc.pvat ? 22 : 0)).sort((a, b) => (a.future ? 1 : 0) - (b.future ? 1 : 0) || a.price - b.price);
+  const kpLike = r => /КП|УКП|поезд/i.test(r.station);
+  const rl = rls.find(r => rkey(r) === calc.prate) || rls.find(r => !r.future && kpLike(r)) || rls[0];
   d.append(
     lab("Терминал / контрагент (из блока «ЖД»)"), h("select", { class: "sel", onchange: e => { calc.pterm = e.target.value; draw(); } }, ...terms.map(t => h("option", { value: t, selected: t === calc.pterm }, t))),
     lab("Город назначения"), h("select", { class: "sel", onchange: e => { calc.city = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.city }, c))),
@@ -1156,6 +1158,15 @@ function portTermView(d, pd, draw) {
     h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.pfut, onchange: e => { calc.pfut = e.target.checked; draw(); } }), "Показывать будущие ставки"),
     prrs.length ? lab("Вид ПРР в порту") : null,
     prrs.length ? h("select", { class: "sel", onchange: e => { calc.tprr = e.target.value; draw(); } }, ...prrs.map(o => h("option", { value: String(o.i), selected: String(o.i) === String(calc.tprr) }, o.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, "") + " — " + money(o.x.p)))) : null);
+  if (rls.length > 1) {
+    d.append(lab("Какая ставка ЖД (отметьте нужную)"), h("div", { style: "display:flex;flex-wrap:wrap;gap:8px" }, ...rls.map(r => {
+      const on = r === rl, g2 = calc.rg && r.guard ? r.guard : 0;
+      return h("label", { style: "flex:1 1 220px;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;cursor:pointer;border:2px solid " + (on ? "#1e5aa8" : "var(--line)") + (on ? ";background:#e8f0fb" : "") },
+        h("input", { type: "radio", name: "prate", checked: on, onchange: () => { calc.prate = rkey(r); draw(); } }),
+        h("span", { style: "flex:1;font-size:13px" }, r.station + (r.future ? " · с " + r.from : "")),
+        h("b", { style: "white-space:nowrap" }, money(r.price + g2)));
+    })));
+  }
   const res = h("div", { class: "rc", style: "display:block;margin-top:10px" });
   if (prr) res.append(line("⚓ ПРР в порту: " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), money(prr.x.p)));
   else res.append(line("⚓ ПРР в порту", "не включён"));
