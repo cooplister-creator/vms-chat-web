@@ -158,7 +158,9 @@ nav button{padding:8px 6px;font-size:14px}
 .grid2>*{min-width:0}
 .cityrow{max-width:100%}
 .grid2.one{grid-template-columns:minmax(0,760px)}
-@media (max-width:1000px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.grid2.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media (max-width:1500px){.grid2.g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1000px){.grid2,.grid2.g3{grid-template-columns:minmax(0,1fr)}}
 .blk{background:var(--card);border-radius:14px;padding:12px 14px}
 .bt{font-weight:700;color:var(--navy);font-size:16px;margin-bottom:8px}
 @media (prefers-color-scheme:dark){.bt{color:#9ecbff}}
@@ -571,7 +573,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 93";
+const WEB_VERSION = "03.11.2026 · сборка 94";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -968,13 +970,15 @@ function buildCalc(m) {
       h("label", {}, h("input", { type: "checkbox", checked: calc.freight, onchange: e => { calc.freight = e.target.checked; draw(); } }), "🚢 Фрахт"),
       h("label", {}, h("input", { type: "checkbox", checked: calc.port, onchange: e => { calc.port = e.target.checked; draw(); } }), "⚓ Порт")));
     if (!calc.rail && !calc.freight && !calc.port) w.append(h("div", { style: "color:var(--muted)" }, "Отметьте ЖД, Фрахт и/или Порт"));
-    if (calc.rail || calc.freight) {
-      const g = h("div", { class: "grid2" + (calc.rail && calc.freight ? "" : " one") });
+    const nb = (calc.freight ? 1 : 0) + (calc.rail ? 1 : 0) + (calc.port ? 1 : 0);
+    w.style.maxWidth = nb === 3 ? "1780px" : "";
+    if (nb) {   // все включённые блоки встают рядом: фрахт · ЖД · порт
+      const g = h("div", { class: "grid2" + (nb === 1 ? " one" : nb === 3 ? " g3" : "") });
       if (calc.freight) g.append(freightBlock(draw));
       if (calc.rail) g.append(railBlock(draw));
+      if (calc.port) g.append(portBlock(draw));
       w.append(g);
     }
-    if (calc.port) w.append(h("div", { style: "margin-top:12px" }, portBlock(draw)));
   };
   draw();
 }
