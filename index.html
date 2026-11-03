@@ -573,7 +573,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 94";
+const WEB_VERSION = "03.11.2026 · сборка 95";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1500,7 +1500,7 @@ function conCard(c, lawyer) {
     h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap" }, h("span", { class: "tt" }, c.title), h("b", {}, stText(c.status))),
     h("div", { class: "sm" }, c.authorName + " · " + pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " + fmtTime(c.time || 0) + (c.round > 1 ? " · круг " + c.round : "")));
   if (c.note) el.append(h("div", {}, c.note));
-  if (c.link) el.append(h("div", {}, "🔗 ", h("a", { href: c.link, target: "_blank", rel: "noopener" }, "ссылка на Google Диск")));
+  if (c.link) el.append(h("div", {}, "🔗 ", /^https:\/\//i.test(c.link) ? h("a", { href: c.link, target: "_blank", rel: "noopener noreferrer" }, "ссылка на Google Диск") : h("span", { style: "color:#d32f2f" }, "ссылка не показана (допустимы только https://)")));
   const meta = c.fileMeta || [];
   if (meta.length) el.append(h("div", { class: "fl" }, ...meta.map(f => h("a", { title: f.by === "lawyer" ? "файл юриста" : "файл автора", onclick: async () => {
     try { const d = await db.collection("contracts").doc(c.id).collection("files").doc(f.id).get(); d.exists ? download(f.name, d.data().b64) : toast("Файл не найден"); }
