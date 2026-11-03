@@ -571,7 +571,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "02.11.2026 · сборка 88";
+const WEB_VERSION = "03.11.2026 · сборка 89";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1187,6 +1187,54 @@ function portTermView(d, pd, draw) {
   d.append(h("div", { class: "note", style: "margin-top:6px" }, "ПРР — по тарифам порта (НДС как в файле порта). " + (vsk ? "Тариф СПН включает перемещение из ВСК; при весе груза больше 30 т надбавка 5 000 ₽. " : "Авто: " + money(AUTO_T.base) + " без НДС, при брутто больше " + AUTO_T.limit + " т +" + money(AUTO_T.add) + " (весовые рамки). ") + "НДС 22% применяется к авто/надбавке и берётся из ставок ЖД с НДС 22%. Фрахт — в своём блоке."));
   return d;
 }
+
+/* ---------- сравнение портов по городу назначения ---------- */
+const ST_MSK = /^(Москва|Московск[а-яё]*\s+узел|Чехов|Ворсино|Люберцы|Белый Раст|Селятино|Бекасово|Домодедово|Подольск|Электроугли|Ногинск|Железнодорожн[а-яё]*|Видное|Кубинка|Коломна|Софрино|Щербинка|Нахабино|Хлебниково|Лобня|Одинцово|Раменское|Бутово|Бирюлево|Силикатная|Кунцево|Царицыно|Люблино|Купавна|Ховрино|Кресты|Тучково|Орехово)(?![а-яё])/i;
+const ST_MAP = [[/^(Новосибирск|Клещиха|Иня|Сеятель|Чемской|Чик)(?![а-яё])/i, "Новосибирск"], [/^(Екатеринбург|Кольцово|Аппаратная|Шувакиш)/i, "Екатеринбург"], [/^(Шушары|Заневск|Автово|СПБ|Санкт|Волхонка)/i, "Санкт-Петербург"], [/^Батарейная|^Иркутск/i, "Иркутск"], [/^Базаиха|^Красноярск/i, "Красноярск"], [/^Ростов/i, "Ростов-на-Дону"], [/^Тольятти/i, "Тольятти"], [/^Безымянка|^Самара/i, "Самара"], [/^Костариха|^Нижний/i, "Нижний Новгород"], [/^Челябинск/i, "Челябинск"], [/^Омск/i, "Омск"], [/^Краснодар/i, "Краснодар"], [/^Казань|^Юдино/i, "Казань"], [/^Барнаул/i, "Барнаул"], [/^Хабаровск/i, "Хабаровск"]];
+function stCity(st) {
+  let c = String(st).replace(/\s*\(.*$/, "").replace(/[-\s]+(Сортировочн[а-яё]*|Сорт|[Тт]оварн[а-яё]*|Грузов[а-яё]*|Восточн[а-яё]*|Северн[а-яё]*|\d)$/i, "").trim();
+  if (ST_MSK.test(c)) return "Москва";
+  for (const [re, n] of ST_MAP) if (re.test(c)) return n;
+  return c;
+}
+function portCompare(ports, draw) {
+  if (calc.cc === undefined) { calc.cc = "Москва"; calc.csz = 0; calc.cg = false; calc.cprr = true; }
+  const rowsOf = pd => [["kp", pd.kp], ["od", pd.od], ["wg", pd.wg]].filter(v => (v[1] || []).length);
+  const cset = new Set(); ports.forEach(pd => rowsOf(pd).forEach(v => v[1].forEach(r => cset.add(stCity(r.st)))));
+  const cities = [...cset].sort((x, y) => { const ix = MAIN_CITIES.indexOf(x), iy = MAIN_CITIES.indexOf(y); return (ix < 0) - (iy < 0) || (ix >= 0 ? ix - iy : x.localeCompare(y, "ru")); });
+  if (!cities.includes(calc.cc)) calc.cc = cities.includes("Москва") ? "Москва" : (cities[0] || "");
+  const d = h("div", { class: "blk", style: "margin-top:12px" }, h("div", { class: "bt" }, "📊 Сравнение портов по городу"));
+  d.append(h("div", { class: "cityrow" }, ...cities.filter(c => MAIN_CITIES.includes(c)).map(c => h("button", { class: "chip" + (c === calc.cc ? " on" : ""), onclick: () => { calc.cc = c; draw(); } }, c))),
+    h("div", { class: "ctl2" },
+      h("select", { class: "sel", title: "Город назначения", onchange: e => { calc.cc = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.cc }, (MAIN_CITIES.includes(c) ? "★ " : "") + c)))),
+    seg(PSZ, calc.csz, i => { calc.csz = i; draw(); }),
+    h("div", { style: "display:flex;gap:16px;flex-wrap:wrap;margin:6px 0" },
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cg, onchange: e => { calc.cg = e.target.checked; draw(); } }), "С охраной"),
+      h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px" }, h("input", { type: "checkbox", checked: calc.cprr, onchange: e => { calc.cprr = e.target.checked; draw(); } }), "С ПРР порта")));
+  const out = [];
+  ports.forEach(pd => {
+    const prrs = pd.port.filter(x => /^Перевалка/i.test(x.g));
+    const prrX = pd.id === "vmtp" ? null : (prrs.find(x => x.c === (pd.prr || "1.1.1")) || prrs[0]);
+    const prrP = calc.cprr && prrX ? prrX.p : 0;
+    rowsOf(pd).forEach(([mk, list], vi) => {
+      let best = null;
+      list.filter(r => stCity(r.st) === calc.cc).forEach(r => { const pr = portRail(portNext(r).now, calc.csz, calc.cg).price; if (pr != null && (!best || pr < best.pr)) best = { r, pr }; });
+      if (!best) return;
+      const lab = pd.labels && pd.labels[mk] ? pd.labels[mk] : { kp: "Контейнерный поезд", od: "Одиночные / группа", wg: "Повагонная отправка" }[mk];
+      out.push({ pd, mk, st: best.r.st, rail: best.pr, prr: prrP, tot: best.pr + prrP, lab, vat: pd.vat ? (pd.vat[mk] || "") : "без НДС" });
+    });
+  });
+  out.sort((a, b) => a.tot - b.tot);
+  if (!out.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px;padding:6px 0" }, "Для города «" + calc.cc + "» и этого типоразмера ставок в портах нет.")); return d; }
+  out.forEach((o, i) => {
+    const el = card(i, money(o.tot), o.pd.name + " · " + o.lab, o.st + " · " + o.vat, "ЖД " + money(o.rail) + (o.prr ? " + ПРР " + money(o.prr) : ""), false, null);
+    el.style.cursor = "pointer"; el.title = "Открыть расчёт по порту";
+    el.onclick = () => { calc.pport = o.pd.id; calc.pm = ["kp", "od", "wg"].indexOf(o.mk); calc.pst = o.st; calc.psz = calc.csz; calc.pg = calc.cg; calc.pdest = 0; draw(); };
+    d.append(el);
+  });
+  d.append(h("div", { class: "note", style: "margin-top:6px" }, "Сначала дешевле. У порта берётся самая дешёвая станция города. ПРР — вид по умолчанию (у ВМТП ставка уже включает ПРР). НДС у портов разный — смотрите пометку у каждой строки. Нажмите на строку — откроется расчёт этого порта."));
+  return d;
+}
 function portBlock(draw) {
   loadPort(draw);
   const d = h("div", { class: "blk" });
@@ -1199,6 +1247,7 @@ function portBlock(draw) {
     if (!ports.length) d.append(h("div", { style: "color:var(--muted);font-size:13px" }, isAdmin ? "Тарифов портов ещё нет. Прикрепите файл с тарифами Помощнику — он сам разберёт." : "Тарифы портов ещё не загружены."));
     d.append(h("div", { class: "cityrow" }, ...ports.map(x => h("button", { class: "chip", style: "font-size:15px;padding:10px 18px", onclick: () => { calc.pport = x.id; draw(); } }, "⚓ " + x.name))));
     if (ports.length) d.append(h("div", { class: "note", style: "margin-top:8px" }, "Тарифы у каждого порта свои. Новые порты появятся здесь после загрузки их тарифов."));
+    if (ports.length) { const w = h("div", {}, d, portCompare(ports, draw)); return w; }
     return d;
   }
   d.append(h("div", { class: "bt", style: "display:flex;align-items:center;gap:10px;flex-wrap:wrap" }, h("span", {}, "⚓ Порт " + pd.name + " → станция"),
