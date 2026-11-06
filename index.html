@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "06.11.2026 · сборка 98";
+const WEB_VERSION = "06.11.2026 · сборка 99";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1379,14 +1379,18 @@ function freightBlock(draw) {
   if (calc.fctr && !ctrs.includes(calc.fctr)) calc.fctr = "";
   const live = calc.fctr ? alive.filter(r => frC(r) === calc.fctr) : alive;
   const cnt = {}; live.forEach(r => cnt[r[1]] = (cnt[r[1]] || 0) + 1);
-  const ports = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
+  const cntAll = {}; alive.forEach(r => cntAll[r[1]] = (cntAll[r[1]] || 0) + 1);
+  const portsAll = Object.keys(cntAll).sort((a, b) => cntAll[b] - cntAll[a] || a.localeCompare(b));
+  const ports = Object.keys(cnt).sort((a, b) => cntAll[b] - cntAll[a] || a.localeCompare(b));
   if (!ports.length) return msg("Все предложения в файле уже закончились — загрузите новый прайс.");
-  if (!ports.includes(calc.fpol)) calc.fpol = ports[0];
+  if (!ports.includes(calc.fpol)) calc.fpol = portsAll.find(p => ports.includes(p)) || ports[0];
   const ofPol = live.filter(r => r[1] === calc.fpol);
   const pods = [...new Set(ofPol.map(r => r[2]))].sort();
   if (!pods.includes(calc.fpod)) calc.fpod = pods.includes("Владивосток") ? "Владивосток" : pods[0];
   const ofPod = ofPol.filter(r => r[2] === calc.fpod);
-  const cities = [...new Set(ofPod.map(r => r[3]))].sort((a, b) => { if (a === FR_PORT) return -1; if (b === FR_PORT) return 1; const ia = MAIN_CITIES.indexOf(a), ib = MAIN_CITIES.indexOf(b); return (ia < 0) - (ib < 0) || (ia >= 0 ? ia - ib : a.localeCompare(b, "ru")); });
+  const cityCmp = (a, b) => { if (a === FR_PORT) return -1; if (b === FR_PORT) return 1; const ia = MAIN_CITIES.indexOf(a), ib = MAIN_CITIES.indexOf(b); return (ia < 0) - (ib < 0) || (ia >= 0 ? ia - ib : a.localeCompare(b, "ru")); };
+  const cities = [...new Set(ofPod.map(r => r[3]))].sort(cityCmp);
+  const citiesAll = [...new Set(alive.filter(r => r[1] === calc.fpol && r[2] === calc.fpod).map(r => r[3]))].sort(cityCmp);
   if (!cities.includes(calc.fcity)) calc.fcity = cities[0];
   // связка с ЖД: выбрали ДРОП до города и размер контейнера во фрахте — в блоке ЖД ставятся тот же город и тот же размер
   const sk = calc.fcity + "|" + calc.fsize;
@@ -1395,14 +1399,14 @@ function freightBlock(draw) {
     calc.type = calc.fsize ? 2 : (calc.type === 2 ? 0 : calc.type);
   }
   calc._sk = sk;
-  const top = ports.slice(0, 8); if (!top.includes(calc.fpol)) top.push(calc.fpol);
+  const top = portsAll.slice(0, 8); if (!top.includes(calc.fpol)) top.push(calc.fpol);
   if (ctrs.length > 1) d.append(h("div", { class: "cityrow wrap2" }, ...[["", "Все подрядчики"], ...ctrs.map(c => [c, FRC[c] || c])].map(([k, tx]) => h("button", { class: "chip" + (k === (calc.fctr || "") ? " on" : ""), onclick: () => { calc.fctr = k; draw(); } }, tx))));
-  d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...top.map(p => h("button", { class: "chip" + (p === calc.fpol ? " on" : ""), onclick: () => { calc.fpol = p; draw(); } }, p.split(" · ")[0]))));
+  d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...top.map(p => h("button", { class: "chip" + (p === calc.fpol ? " on" : ""), style: ports.includes(p) ? "" : "opacity:.4", onclick: () => { if (ports.includes(p)) { calc.fpol = p; draw(); } } }, p.split(" · ")[0]))));
   d.append(h("div", { class: "ctl2" },
     h("input", { class: "sel", list: "frports", placeholder: "Другой порт отправления…", style: "flex:1;min-width:150px", onchange: e => { const v = e.target.value.trim(), hit = ports.find(p => p.toLowerCase() === v.toLowerCase() || p.split(" · ").some(x => x.toLowerCase() === v.toLowerCase())); if (hit) { calc.fpol = hit; draw(); } else if (v) toast("Такого порта нет в прайсе"); } }),
     h("datalist", { id: "frports" }, ...ports.map(p => h("option", { value: p }))),
     h("select", { class: "sel", title: "Порт назначения", onchange: e => { calc.fpod = e.target.value; draw(); } }, ...pods.map(p => h("option", { value: p, selected: p === calc.fpod }, "→ " + p)))));
-  d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...cities.filter(c => c === FR_PORT || MAIN_CITIES.includes(c)).map(c => h("button", { class: "chip" + (c === calc.fcity ? " on" : ""), onclick: () => { calc.fcity = c; draw(); } }, c === FR_PORT ? "⚓ Только порт" : "🚚 " + c))));
+  d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...citiesAll.filter(c => c === FR_PORT || MAIN_CITIES.includes(c)).map(c => h("button", { class: "chip" + (c === calc.fcity ? " on" : ""), style: cities.includes(c) ? "" : "opacity:.4", onclick: () => { if (cities.includes(c)) { calc.fcity = c; draw(); } } }, c === FR_PORT ? "⚓ Только порт" : "🚚 " + c))));
   const ctl = h("div", { class: "ctl2" },
     h("select", { class: "sel", title: "ДРОП до города", onchange: e => { calc.fcity = e.target.value; draw(); } }, ...cities.map(c => h("option", { value: c, selected: c === calc.fcity }, c === FR_PORT ? "Только порт (без дропа)" : "ДРОП: " + c))),
     seg(["20GP", "40HQ"], calc.fsize, i => { calc.fsize = i; draw(); }));
