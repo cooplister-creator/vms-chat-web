@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "03.11.2026 · сборка 96";
+const WEB_VERSION = "06.11.2026 · сборка 97";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1023,12 +1023,21 @@ function activeRates() {
 }
 const MAIN_CITIES = ["Москва", "Санкт-Петербург", "Новосибирск", "Екатеринбург", "Красноярск", "Иркутск", "Казань", "Ростов-на-Дону", "Краснодар", "Самара", "Челябинск", "Омск"];
 const RADD = { prr: 15000, auto: 20000, heavy: 10000, heavyRe: /АТК|ЮНИОН/i };   // ПРР + авто — всем; надбавка за вес >20 т — только этим терминалам
-const radd = r => { const k = r.vat === 22 ? 1.22 : 1; return Math.round((calc.radd ? RADD.prr + RADD.auto : 0) * k + (calc.rheavy && RADD.heavyRe.test(r.contractor) ? RADD.heavy * k : 0)); };
+const rateSpn = r => /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor);
+// ПРР порта ВСК по умолчанию: для вывоза с СПН (Находка) он всегда включён в итог
+function vskPrr() {
+  const pd = ((PORT && PORT.ports) || []).find(x => x.id === "vsk"); if (!pd) return null;
+  const prrs = (pd.port || []).filter(x => /^Перевалка/i.test(x.g));
+  const x = prrs.find(y => y.c === (pd.prr || "1.1.1")) || prrs[0];
+  return x && x.p != null ? { p: x.p, n: x.n } : null;
+}
+const radd = r => { if (rateSpn(r)) { const v = vskPrr(); return v ? v.p : 0; } const k = r.vat === 22 ? 1.22 : 1; return Math.round((calc.radd ? RADD.prr + RADD.auto : 0) * k + (calc.rheavy && RADD.heavyRe.test(r.contractor) ? RADD.heavy * k : 0)); };
 const rgNum = r => r.price + (calc.rg && r.guard ? r.guard : 0) + radd(r);
 const rgPrice = r => money(rgNum(r));
-const rgSt = r => r.station + (calc.rg ? (r.guard ? " · +охрана " + money(r.guard) + (r.gvat ? " (НДС " + r.gvat + "%)" : "") : " · охрана не указана") : "");
+const rgSt = r => r.station + (rateSpn(r) ? (vskPrr() ? " · ставка " + money(r.price) + " + ПРР ВСК " + money(vskPrr().p) : " · ПРР ВСК: нет данных") : "") + (calc.rg ? (r.guard ? " · +охрана " + money(r.guard) + (r.gvat ? " (НДС " + r.gvat + "%)" : "") : " · охрана не указана") : "");
 function railBlock(draw) {
   if (!ratesLoaded) loadRates(draw);
+  if (calc.orig === 1 && !PORT) loadPort(draw);
   const isSpn = r => /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor);
   const AR = activeRates().filter(r => (!r.arch || (isAdmin && SHOWARCH)) && (calc.orig === 1) === isSpn(r)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   if (!cities.includes(calc.city)) calc.city = cities.includes("Москва") ? "Москва" : (cities[0] || "");
@@ -1079,8 +1088,9 @@ function railBlock(draw) {
     }
   }
   d.append(h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rg, onchange: e => { calc.rg = e.target.checked; draw(); } }), "С охраной (где охрана указана в файле)"),
-    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.radd, onchange: e => { calc.radd = e.target.checked; draw(); } }), "ПРР + авто (+" + money(RADD.prr + RADD.auto) + ")"),
-    h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rheavy, onchange: e => { calc.rheavy = e.target.checked; draw(); } }), "Вес больше 20 т (+" + money(RADD.heavy) + " к АТК и ЮНИОН)"));
+    ...(calc.orig === 1 ? [h("div", { style: "font-size:12px;color:var(--muted);margin:4px 0 8px" }, "ПРР порта ВСК включён в ставку СПН автоматически (ставка + ПРР).")] : [
+      h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.radd, onchange: e => { calc.radd = e.target.checked; draw(); } }), "ПРР + авто (+" + money(RADD.prr + RADD.auto) + ")"),
+      h("label", { style: "display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13px" }, h("input", { type: "checkbox", checked: !!calc.rheavy, onchange: e => { calc.rheavy = e.target.checked; draw(); } }), "Вес больше 20 т (+" + money(RADD.heavy) + " к АТК и ЮНИОН)")]));
   const vg = h("div", { class: "vgrid" });
   [0, 22].forEach(vat => {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
