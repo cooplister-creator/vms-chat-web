@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "06.11.2026 · сборка 103";
+const WEB_VERSION = "06.11.2026 · сборка 104";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1136,7 +1136,7 @@ function railBlock(draw) {
 }
 
 /* ---------- порты: ЖД от порта + ПРР и услуги терминала ---------- */
-let PORT = null, portLoading = false, WIPE_ASK = 0;
+let PORT = null, portLoading = false, WIPE_ASK = 0, WIPE2 = null;
 async function loadPort(draw) {
   if (PORT || portLoading) return; portLoading = true;
   try { PORT = await docsCall("action=port"); } catch (e) { PORT = { err: e.message || "ошибка", ports: [] }; }
@@ -2066,6 +2066,34 @@ function buildBot(m) {
       catch (e) { BOT.push({ me: false, text: "Не получилось очистить: " + (e.message || "ошибка") }); }
       draw(); return true; }
     if (/^очистить\s+вс[её]$/.test(n)) { BOT.push({ me: true, text: q }); BOT.push({ me: false, text: "Подтверждать нечего: очистка уже выполнена или время ожидания (3 минуты) истекло. Чтобы очистить заново, напишите «очисти все ставки»." }); draw(); return true; }
+    if (/^(подтверждаю|подтвердить)$/.test(n) && WIPE2 && Date.now() - WIPE2.ts < 180000) { BOT.push({ me: true, text: q }); const w = WIPE2; WIPE2 = null;
+      if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+      busy = true; draw();
+      try { const tk = await me.getIdToken();
+        const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe_scope", token: tk, kind: w.kind, name: w.name, dry: false }) });
+        const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+        RATES = []; ratesLoaded = false; PORT = null; FR = null;
+        BOT.push({ me: false, text: "🧹 Удалено:\n• " + j.plan.join("\n• ") + "\n\nКопии на Диске: " + (j.backups || []).join(", ") + ". Обновите страницу, чтобы увидеть результат." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/Неизвестное действие/.test(e.message || "") ? " (нужна новая версия развёртывания скрипта)" : "") }); }
+      busy = false; draw(); return true; }
+    mi = /^(очист\S*|удали\S*|сотри\S*|убер\S*)\s+(вс[её]\s+)?(?:(?:ставк|тариф)\S*(?=\s|$)\s*)?(\S[\s\S]*)$/.exec(n);
+    if (mi && !/^(ставк\S*|тариф\S*)$/.test(mi[3].trim()) && /^(очист|удал|сотр|убер)/.test(n) && !/предложени|отработан|напоминани|журнал|чат|историю|переписк|вопрос|доверенност|док/.test(n) && /(ставк|тариф|^\S+\s+(жд|ж\/д|фрахт|порт|юнион|атк|фреш|синерги|спн|вмтп|вмрп|вмкт|вмпп|вск|пасифик|соллерс|g\.?h|trans))/.test(n)) {
+      let rest = mi[3].replace(/^(на|по|от|подрядчик\S*|контрагент\S*)\s+/, "").trim();
+      let kind = "name", name = rest;
+      if (/^(жд|ж\/д|железн\S*)(\s+ставк\S*)?$/.test(rest)) { kind = "rail"; name = ""; }
+      else if (/^(морск\S*\s+)?фрахт\S*(\s+ставк\S*)?$/.test(rest)) { kind = "freight"; name = ""; }
+      else if (/^(все\s+)?порт(ов|ы|а)?(\s+ставк\S*)?$/.test(rest)) { kind = "port"; name = ""; }
+      else name = rest.replace(/^(жд|ж\/д|фрахт\S*|порт(а|ов)?)\s+/, "");
+      if (rest) { BOT.push({ me: true, text: q });
+        if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
+        busy = true; draw();
+        try { const tk = await me.getIdToken();
+          const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_wipe_scope", token: tk, kind, name, dry: true }) });
+          const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+          if (j.none) BOT.push({ me: false, text: "Не нашёл, что удалять" + (name ? " по названию «" + name + "»" : "") + ". Названия: ЖД-подрядчики (ЮНИОН, АТК, ФРЕШ, ТРАНС СИНЕРГИЯ, СПН), фрахт (G.H, Trans-China, Our Logistic), порты (ВМТП, ВМРП…)." });
+          else { WIPE2 = { kind, name, ts: Date.now() }; BOT.push({ me: false, text: "⚠️ Будет удалено полностью:\n• " + j.plan.join("\n• ") + "\n\nПеред этим на Диске сохранится копия. Чтобы подтвердить, напишите: подтверждаю (в течение 3 минут)." }); } }
+        catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/Неизвестное действие/.test(e.message || "") ? " (нужна новая версия развёртывания скрипта)" : "") }); }
+        busy = false; draw(); return true; } }
     if (/^(очист\S*|удали\S*|сотри\S*|сбрось\S*)\s+(вс[её]\s+)?(ставк|тариф|жд|порт|прр)/.test(n) && /(вс[её]|тариф|ставк)/.test(n) && !/предложени|отработан/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это может только разработчик." }); draw(); return true; }
       WIPE_ASK = Date.now();
