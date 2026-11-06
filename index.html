@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "06.11.2026 · сборка 97";
+const WEB_VERSION = "06.11.2026 · сборка 98";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1348,6 +1348,7 @@ function portBlock(draw) {
 /* ---------- фрахт: реальные данные из таблицы «Фрахт» ---------- */
 let FR = null, frLoading = false;
 const FR_PORT = "Только порт";
+const FRC = { "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China" };
 async function loadFreight(draw) {
   if (FR || frLoading) return; frLoading = true;
   let j = null, err = "";
@@ -1372,7 +1373,11 @@ function freightBlock(draw) {
   if (!FR.rows.length) return msg(FR.err ? "Не удалось загрузить: " + FR.err : "Ставок фрахта пока нет. Администратор может загрузить прайс помощнику.");
   const t0 = new Date(); t0.setHours(0, 0, 0, 0);
   // r: 0 линия, 1 порт отпр., 2 порт назн., 3 дроп, 4 тип, 5 20GP, 6 40HQ, 7 рейс, 8 дней, 9 до, 10 условия, 11 примечание, 12 даты отхода
-  const live = FR.rows.filter(r => { const e = frDate(r[9]); return !e || e >= t0; });
+  const frC = r => (r[13] > -1 ? FR.dict[r[13]] : "") || "OUR LOGISTIC";
+  const alive = FR.rows.filter(r => { const e = frDate(r[9]); return !e || e >= t0; });
+  const ctrs = [...new Set(alive.map(frC))].sort((a, b) => Object.keys(FRC).indexOf(a) - Object.keys(FRC).indexOf(b));
+  if (calc.fctr && !ctrs.includes(calc.fctr)) calc.fctr = "";
+  const live = calc.fctr ? alive.filter(r => frC(r) === calc.fctr) : alive;
   const cnt = {}; live.forEach(r => cnt[r[1]] = (cnt[r[1]] || 0) + 1);
   const ports = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
   if (!ports.length) return msg("Все предложения в файле уже закончились — загрузите новый прайс.");
@@ -1391,7 +1396,8 @@ function freightBlock(draw) {
   }
   calc._sk = sk;
   const top = ports.slice(0, 8); if (!top.includes(calc.fpol)) top.push(calc.fpol);
-  d.append(h("div", { class: "cityrow" }, ...top.map(p => h("button", { class: "chip" + (p === calc.fpol ? " on" : ""), onclick: () => { calc.fpol = p; draw(); } }, p.split(" · ")[0]))));
+  if (ctrs.length > 1) d.append(h("div", { class: "cityrow wrap2" }, ...[["", "Все подрядчики"], ...ctrs.map(c => [c, FRC[c] || c])].map(([k, tx]) => h("button", { class: "chip" + (k === (calc.fctr || "") ? " on" : ""), onclick: () => { calc.fctr = k; draw(); } }, tx))));
+  d.append(h("div", { class: "cityrow", style: "margin-top:6px" }, ...top.map(p => h("button", { class: "chip" + (p === calc.fpol ? " on" : ""), onclick: () => { calc.fpol = p; draw(); } }, p.split(" · ")[0]))));
   d.append(h("div", { class: "ctl2" },
     h("input", { class: "sel", list: "frports", placeholder: "Другой порт отправления…", style: "flex:1;min-width:150px", onchange: e => { const v = e.target.value.trim(), hit = ports.find(p => p.toLowerCase() === v.toLowerCase() || p.split(" · ").some(x => x.toLowerCase() === v.toLowerCase())); if (hit) { calc.fpol = hit; draw(); } else if (v) toast("Такого порта нет в прайсе"); } }),
     h("datalist", { id: "frports" }, ...ports.map(p => h("option", { value: p }))),
@@ -1405,15 +1411,15 @@ function freightBlock(draw) {
   if (atPort) d.append(h("div", { class: "ctl2" }, seg(["COC · контейнер линии", "SOC · свой контейнер"], calc.fkind, i => { calc.fkind = i; draw(); })));
   const kind = atPort ? (calc.fkind ? "SOC" : "COC") : "COC";
   const pi = calc.fsize ? 6 : 5;
-  const list = ofPod.filter(r => r[3] === calc.fcity && r[4] === kind && r[pi] > 0).sort((a, b) => a[pi] - b[pi]);
+  const list = ofPod.filter(r => r[3] === calc.fcity && r[4] === kind && r[pi] > 0).sort((a, b) => ((a[14] || 0) - (b[14] || 0)) || (a[pi] - b[pi]));
   const col = h("div", { style: "margin-top:8px" });
   if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет предложений для этого сочетания"));
   const usdRate = RT && RT.usd ? RT.usd.Value / (RT.usd.Nominal || 1) : 0;
   list.forEach((r, i) => {
     const e = frDate(r[9]), left = e ? Math.round((e - t0) / 86400000) : null;
     const price = h("span", {}, usd(r[pi]), usdRate ? h("div", { class: "sm", style: "font-size:11px;font-weight:400" }, "≈ " + money(Math.round(r[pi] * usdRate / 100) * 100)) : null);
-    const l3 = h("span", {}, r[9] ? "до " + r[9].slice(0, 5) : "срок не указан", left !== null && left <= 3 ? h("b", { style: "color:#d32f2f" }, " (" + (left === 0 ? "сегодня" : "осталось " + left + " дн.") + ")") : "", r[8] ? " · " + r[8] + " дн." : "", r[7] ? " · " + r[7] : "");
-    const c = card(i, price, r[0], calc.fpol.split(" · ")[0] + " → " + calc.fpod + " · " + kind + (atPort ? "" : " · ДРОП " + calc.fcity), l3, false, FR.file);
+    const l3 = h("span", {}, r[9] ? "до " + r[9].slice(0, 5) : "срок не указан", left !== null && left <= 3 ? h("b", { style: "color:#d32f2f" }, " (" + (left === 0 ? "сегодня" : "осталось " + left + " дн.") + ")") : "", r[8] ? " · " + r[8] + " дн." : "", r[7] ? " · " + r[7] : "", r[14] ? h("b", { style: "color:#d32f2f" }, " · устарело (отход " + (r[12] > -1 ? FR.dict[r[12]] : "—") + ")") : "");
+    const c = card(i, price, r[0], (FRC[frC(r)] || frC(r)) + " · " + calc.fpol.split(" · ")[0] + " → " + calc.fpod + " · " + kind + (atPort ? "" : " · ДРОП " + calc.fcity), l3, false, r[15] > -1 ? FR.dict[r[15]] : FR.file);
     const extra = [r[10] > -1 ? FR.dict[r[10]] : "", r[12] > -1 ? FR.dict[r[12]] : ""].filter(Boolean), note = r[11] > -1 ? FR.dict[r[11]] : "";
     if (extra.length || note) {
       const dt = h("details", { style: "font-size:12px;opacity:.8;margin-top:2px" }, h("summary", { style: "cursor:pointer" }, "Условия"), h("div", { style: "white-space:pre-wrap;padding-top:2px" }, [extra.join(" · "), note].filter(Boolean).join("\n")));
@@ -1782,7 +1788,7 @@ function buildBot(m) {
         let msg = "🚢 Это прайс морского фрахта.\nФайл: " + j.file + "\nКонтрагент: " + j.contractor + "\nПредложений: " + j.total + " · линий: " + j.lines + " · портов отправления: " + j.ports + "\nСейчас в таблице: " + j.oldTotal;
         if (j.validity && j.validity.length) msg += "\n\nСроки действия (дата — предложений):\n" + j.validity.map(x => "• " + x).join("\n");
         if (j.notes && j.notes.length) msg += "\n\n" + j.notes.map(x => "ℹ️ " + x).join("\n");
-        msg += "\n\nНовый прайс ЦЕЛИКОМ заменит старый. Проверьте и нажмите «Применить».";
+        msg += "\n\nНовый прайс заменит старые ставки этого подрядчика (остальные не тронем). Проверьте и нажмите «Применить».";
         BOT.push({ me: false, text: msg, apply: j.previewId, fr: true });
       } else if (j.kind === "rates") {
         const st = j.stats;
