@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "06.11.2026 · сборка 100";
+const WEB_VERSION = "06.11.2026 · сборка 102";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1005,12 +1005,27 @@ function card(i, price, l1, l2, l3, future, file) {
     file ? h("button", { title: "Открыть файл со ставкой", style: "margin-left:auto;flex:none;align-self:center;border:0;background:transparent;border-radius:8px;font-size:13px;line-height:1;padding:3px 4px;opacity:.7;cursor:pointer", onclick: e => { e.stopPropagation(); openRateFile(file); } }, "📄") : null);
 }
 const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
-let ratesLoaded = false;
+let ratesLoaded = false, RAILNOTES = [];
+async function railNotePost(action, extra) {
+  const tk = await me.getIdToken();
+  const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ action, token: tk }, extra)) });
+  const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+  if (Array.isArray(j.notes)) RAILNOTES = j.notes;
+  return j;
+}
+function railNoteEls(draw) {
+  return (RAILNOTES || []).map(n => h("div", { style: "background:#fff8e1;border:1px solid #ffe08a;border-radius:10px;padding:8px 10px;margin:6px 0;font-size:13px;display:flex;gap:8px;align-items:flex-start" },
+    h("div", { style: "flex:1;min-width:0" }, h("div", { style: "font-weight:700;font-size:12px;color:#8a5a00;margin-bottom:2px" }, "ℹ️ Информация · " + new Date(n.ts).toLocaleDateString("ru-RU") + (n.by ? " · " + n.by : "")),
+      h("div", { style: "white-space:pre-wrap;word-break:break-word" }, n.text)),
+    isAdmin ? h("button", { title: "Удалить заметку", style: "flex:none;border:0;background:transparent;color:#d32f2f;font-size:16px;font-weight:700;cursor:pointer;padding:0 4px", onclick: async () => {
+      if (!confirm("Удалить эту заметку из блока ЖД?")) return;
+      try { await railNotePost("rail_note_del", { id: n.id }); draw(); } catch (e) { toast(e.message || "Не получилось удалить"); } } }, "✕") : null));
+}
 async function loadRates(draw) {
   ratesLoaded = true;
   try {
     const j = await docsCall("action=rates");
-    if (Array.isArray(j.rates)) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
+    RAILNOTES = Array.isArray(j.notes) ? j.notes : []; if (Array.isArray(j.rates)) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
   } catch (e) { console.warn("rates", e); }
 }
 let SHOWARCH = false; const SEL = new Set();
@@ -1042,6 +1057,7 @@ function railBlock(draw) {
   const AR = activeRates().filter(r => (!r.arch || (isAdmin && SHOWARCH)) && (calc.orig === 1) === isSpn(r)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
   if (!cities.includes(calc.city)) calc.city = cities.includes("Москва") ? "Москва" : (cities[0] || "");
   const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚆 Железная дорога · отправление " + (calc.orig === 1 ? "Находка (СПН)" : "Владивосток")),
+    ...railNoteEls(draw),
     seg(["Владивосток", "Находка (СПН)"], calc.orig, i => { calc.orig = i; calc.city = ""; draw(); }),
     h("div", { class: "cityrow" }, ...cities.filter(c => MAIN_CITIES.includes(c)).sort((x, y) => MAIN_CITIES.indexOf(x) - MAIN_CITIES.indexOf(y)).map(c =>
       h("button", { class: "chip" + (c === calc.city ? " on" : ""), onclick: () => { calc.city = c; draw(); } }, c))),
@@ -2010,6 +2026,11 @@ function buildBot(m) {
   async function adminCmd(q) {
     const n = norm(q).trim();
     let mi;
+    if (isAdmin && /^(ставк\S*|инф\S*|ифн\S*|информаци\S*)(\s+\S+){0,3}?\s+(жд|ж\/д|желез\S*)(\s|$|[!.,:;-])/.test(n) && /\d/.test(n) && !/\?\s*$/.test(n)) { BOT.push({ me: true, text: q });
+      busy = true; draw();
+      try { await railNotePost("rail_note_add", { text: q }); BOT.push({ me: false, text: "✅ Добавил информацию в блок «Железная дорога» (Расчёт). Виден всем 30 дней; убрать можно крестиком там же." }); }
+      catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + (/Неизвестное действие/.test(e.message || "") ? " (нужна новая версия развёртывания скрипта)" : "") }); }
+      busy = false; draw(); return true; }
     if (/^(отработан\S*(\s+(предложени\S*|идеи|список))?|архив\s+предложени\S*)$/.test(n)) { BOT.push({ me: true, text: q });
       if (!isDev()) { BOT.push({ me: false, text: "Это видит только разработчик." }); draw(); return true; }
       try { const ds = await ideasList(true);
