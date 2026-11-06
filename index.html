@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "06.11.2026 · сборка 99";
+const WEB_VERSION = "06.11.2026 · сборка 100";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1096,7 +1096,17 @@ function railBlock(draw) {
     const col = h("div", {}, h("h2", { class: "v" }, "НДС " + vat + "%"));
     const list = AR.filter(r => r.city === calc.city && r.type === calc.type && r.vat === vat).sort((a, b) => ((a.arch ? 2 : a.future ? 1 : 0) - (b.arch ? 2 : b.future ? 1 : 0)) || (a.arch ? b.td - a.td : a.future ? a.fd - b.fd : rgNum(a) - rgNum(b)));
     if (!list.length) col.append(h("div", { style: "color:var(--muted);font-size:13px" }, "Нет данных"));
-    list.forEach((r, i) => { if (!r.arch) { col.append(card(i, rgPrice(r), r.contractor, rgSt(r), per(r), r.future, r.file)); return; }
+    list.forEach((r, i) => { if (!r.arch) { const el0 = card(i, rgPrice(r), r.contractor, rgSt(r), per(r), r.future, r.file);
+        if (USERS[me.uid] && USERS[me.uid].owner) { el0.style.alignItems = "center"; el0.append(h("button", { title: "Удалить ставку (разработчик)", style: "flex:none;border:0;background:transparent;color:#d32f2f;font-size:15px;font-weight:700;cursor:pointer;padding:3px 6px", onclick: async e => {
+          e.stopPropagation();
+          if (!confirm("Удалить ставку?\n" + r.contractor + " · " + r.station + " · " + money(r.price) + "\n" + r.from + "–" + r.to + "\nЭто нельзя отменить.")) return;
+          try {
+            const tk = await me.getIdToken();
+            const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "rates_remove", token: tk, items: [{ contractor: r.contractor, station: r.station, type: r.type, vat: r.vat, from: r.from, to: r.to, price: r.price }] }) });
+            const j = JSON.parse(await resp.text()); if (j.error) throw new Error(j.error);
+            RATES = RATES.filter(x => rkey(x) !== rkey(r)); toast("Удалено: " + j.deleted); draw();
+          } catch (er) { toast(er.message || "Не получилось удалить"); } } }, "✕")); }
+        col.append(el0); return; }
       const k = rkey(r), cb = h("input", { type: "checkbox", style: "width:20px;height:20px;margin:0 10px 0 0;flex:none" });
       cb.checked = SEL.has(k); cb.onchange = () => { cb.checked ? SEL.add(k) : SEL.delete(k); draw(); };
       const el = card(1, rgPrice(r), r.contractor, rgSt(r), per(r), false, r.file);
