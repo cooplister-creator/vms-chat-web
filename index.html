@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "09.11.2026 · сборка 106";
+const WEB_VERSION = "09.11.2026 · сборка 107";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1374,7 +1374,7 @@ function portBlock(draw) {
 /* ---------- фрахт: реальные данные из таблицы «Фрахт» ---------- */
 let FR = null, frLoading = false;
 const FR_PORT = "Только порт";
-const FRC = { "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China" };
+const FRC = { "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China", "GNLST": "GNLST", "DYS-VMS": "DYS-VMS", "SPECIAL (SKR/HAL)": "Special (SKR/HAL)" };
 async function loadFreight(draw) {
   if (FR || frLoading) return; frLoading = true;
   let j = null, err = "";
