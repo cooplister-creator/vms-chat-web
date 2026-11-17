@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "17.11.2026 · сборка 109";
+const WEB_VERSION = "17.11.2026 · сборка 110";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1387,8 +1387,14 @@ async function loadFreight(draw) {
 }
 const frEtdShow = (s, t0) => {
   s = String(s || "").replace(/\s+/g, " ").trim(); if (!s) return "";
-  const ds = [], re = /(\d{1,2})[\/.](\d{1,2})(?!\d)/g; let m;
-  while ((m = re.exec(s))) {
+  const ds = [], MO = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  const addD = (d, mo) => { if (d < 1 || d > 31 || mo < 1 || mo > 12) return; let dt = new Date(t0.getFullYear(), mo - 1, d); if (dt < new Date(t0.getTime() - 200 * 86400000)) dt = new Date(t0.getFullYear() + 1, mo - 1, d); if (!ds.some(x => +x === +dt)) ds.push(dt); };
+  const MN = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*", LST = "(\\d{1,2}(?:\\s*[\\/,&]\\s*\\d{1,2})*)";
+  let mm; const reA = new RegExp("\\b" + MN + "\\.?\\s*" + LST + "(?![\\d-])", "gi"), reB = new RegExp("(?<![\\d/])" + LST + "\\s*\\.?\\s*" + MN + "\\b", "gi");
+  while ((mm = reA.exec(s))) mm[2].split(/[\/,&]/).forEach(x => addD(+x, MO[mm[1].toLowerCase()]));
+  while ((mm = reB.exec(s))) mm[1].split(/[\/,&]/).forEach(x => addD(+x, MO[mm[2].toLowerCase()]));
+  const named = ds.length, re = /(\d{1,2})[\/.](\d{1,2})(?!\d)/g; let m;
+  while (!named && (m = re.exec(s))) {
     const d = +m[1], mo = +m[2]; if (d < 1 || d > 31 || mo < 1 || mo > 12) continue;
     let dt = new Date(t0.getFullYear(), mo - 1, d); if (dt < new Date(t0.getTime() - 200 * 86400000)) dt = new Date(t0.getFullYear() + 1, mo - 1, d);
     if (!ds.some(x => +x === +dt)) ds.push(dt);
