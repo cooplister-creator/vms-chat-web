@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "17.11.2026 · сборка 110";
+const WEB_VERSION = "19.11.2026 · сборка 111";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1866,7 +1866,7 @@ function buildBot(m) {
         const u = parseUntil(j.until);
         BOT.push({ me: false, text: u ? "✅ Это доверенность — добавил в реестр: " + j.org + ". Срок до " + pad(u.getDate()) + "." + pad(u.getMonth() + 1) + "." + u.getFullYear() + (u < new Date(new Date().toDateString()) ? " — уже просрочена!" : ".") : "⚠️ Доверенность «" + j.name + "» добавлена, но срок не распознан — проверьте его в реестре." });
       }
-    } catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
+    } catch (e) { BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") + "\n\nЕсли это тариф порта, проверьте его название в документе. При ошибке распознавания ставки не применяются." }); }
     busy = false; draw();
   }
   async function get(d, dl) {
