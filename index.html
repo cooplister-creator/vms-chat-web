@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "19.11.2026 · сборка 114";
+const WEB_VERSION = "19.11.2026 · сборка 115";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1160,27 +1160,35 @@ function portRail(row, sz, guard) {   // → { price, note }
   }
   return { price: row.p[sz * 2 + g], note: "" };
 }
-// FESCO: новые периоды берём из ЖД-таблицы, старые — из port_tariffs.json.
-// Никакой автоматической подстановки старой цены при отсутствии будущей ставки.
-const FESCO_START_114 = "01.12.2026";
-function fescoStationKey114(s) {
-  const v = String(s || "").toLowerCase().replace(/ё/g, "е").replace(/[–—]/g, "-").trim();
+// 115: периоды FESCO из единой базы порта, не из ЖД-таблицы.
+const FESCO_START_115 = '01.12.2026';
+function fescoKey115(s) {
+  const v = String(s || '').toLowerCase().replace(/ё/g,'е').replace(/[–—]/g,'-').trim();
   const m = /\(([^()]*)\)\s*$/.exec(v);
-  return (m ? m[1] : v).replace(/[^а-яa-z0-9]/g, "");
+  return (m ? m[1] : v).replace(/[^а-яa-z0-9]/g,'');
 }
-function fescoFuture114(mk) {
-  const contractor = mk === "kp" ? "ФЕСКО COC" : "ФЕСКО SOC";
-  return activeRates().filter(r => r.contractor === contractor && r.from === FESCO_START_114 && !r.arch && Number(r.vat) === 0);
+function fescoPeriod115(pd, uiMode, preview) {
+  const nativeMode = /SOC/i.test((pd.labels || {})[uiMode] || '') ? 'od' : 'kp';
+  const all = ((pd.periods || {})[nativeMode] || []).slice().sort((a,b) => {
+    const n = s => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s||''); return m ? Number(m[3]+m[2]+m[1]) : 0; };
+    return n(a.from)-n(b.from);
+  });
+  const now = new Date(), today = now.getFullYear()*10000+(now.getMonth()+1)*100+now.getDate();
+  const numberDate = s => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s||''); return m ? Number(m[3]+m[2]+m[1]) : 0; };
+  const future = all.filter(p => numberDate(p.from) > today);
+  const current = all.filter(p => numberDate(p.from) <= today);
+  return preview ? (future[0] || (current.length ? null : all[all.length-1] || null)) : (current[current.length-1] || null);
 }
-function fescoRate114(station, mk, sz, withGuard) {
-  const typ = sz === 0 ? 0 : sz === 1 ? 1 : sz === 3 ? 2 : -1;
-  if (typ < 0) return { price: null, note: "Для этой весовой категории в тарифе FESCO с 01.12.2026 отдельной ставки нет." };
-  const matches = fescoFuture114(mk).filter(r => Number(r.type) === typ && fescoStationKey114(r.station) === fescoStationKey114(station));
-  if (matches.length !== 1) return { price: null, note: matches.length ? "Неоднозначное совпадение станции в новых тарифах." : "Новая ставка для этой станции не найдена в ЖД-таблице. Проверьте импорт FESCO." };
-  const x = matches[0], base = Number(x.price), guard = Number(x.guard);
-  if (!Number.isFinite(base) || base <= 0) return { price: null, note: "Некорректная цена в новой ставке." };
-  if (withGuard && (!Number.isFinite(guard) || guard <= 0)) return { price: null, note: "В новой ставке не указана охрана. Снимите галочку или проверьте импорт." };
-  return { price: base + (withGuard ? guard : 0), note: "Тариф FESCO с 01.12.2026 · НДС 0%" + (withGuard ? "; охрана " + money(guard) + " включена в показанную сумму" : "") + ".", future: true };
+function fescoPrice115(period, station, sz, guard) {
+  if (!period) return {price:null,note:'Для выбранного периода тариф FESCO не загружен в базу порта.'};
+  const hits = (period.rows || []).filter(r => fescoKey115(r.st) === fescoKey115(station));
+  if (hits.length !== 1) return {price:null,note:'Для этой станции нет однозначной ставки в периоде '+period.from};
+  if (sz===2 || sz===4) return {price:null,note:'Для этой весовой категории отдельной ставки в документе FESCO нет.'};
+  const r = hits[0], ix = sz===3?6:sz*2, base = Number(r.p[ix]);
+  const protection = Number((r.ga||[])[sz===3?1:0]);
+  if (!Number.isFinite(base) || base<=0) return {price:null,note:'Ставка не указана.'};
+  if (guard && (!Number.isFinite(protection)||protection<=0)) return {price:null,note:'Охрана не указана.'};
+  return {price:base+(guard?protection:0),note:'FESCO '+period.from+' · '+(guard?'охрана '+money(protection)+' включена · ':'')+'НДС 0%'};
 }
 function portNext(row) {   // → { now: действующие ставки, later: { from, p, p45 } | null }
   const n = row.next; if (!n) return { now: row, later: null };
@@ -1326,13 +1334,11 @@ function portBlock(draw) {
   if (!pd.kp.length && !pd.od.length && !wgL.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
   if (calc.pm > (wgL.length ? 2 : 1)) calc.pm = 0;
   if (pd.id === "vmtp" && !ratesLoaded) loadRates(draw);
-  const mkSelected114 = ["kp", "od", "wg"][calc.pm];
-  const newMode114 = pd.id === "vmtp" && !!calc.pfescoDec;
-  const originalList114 = [pd.kp, pd.od, wgL][calc.pm] || pd.kp;
-  const futureRows114 = newMode114 && mkSelected114 !== "wg" ? fescoFuture114(mkSelected114) : [];
-  const list = newMode114 && mkSelected114 !== "wg" ?
-    [...originalList114, ...futureRows114.filter(r => !originalList114.some(o => fescoStationKey114(o.st) === fescoStationKey114(r.station))).map(r => ({ st: r.station }))]
-      .filter((r, i, a) => a.findIndex(x => fescoStationKey114(x.st) === fescoStationKey114(r.st)) === i) : originalList114;
+  const mk115 = ["kp", "od", "wg"][calc.pm];
+  const isFesco115 = pd.id === 'vmtp' && mk115 !== 'wg';
+  const selectedPeriod115 = isFesco115 ? fescoPeriod115(pd, mk115, !!calc.pfescoDec) : null;
+  const originalList115 = [pd.kp,pd.od,wgL][calc.pm] || pd.kp;
+  const list = selectedPeriod115 ? [...originalList115,...(selectedPeriod115.rows||[]).filter(r=>!originalList115.some(o=>fescoKey115(o.st)===fescoKey115(r.st)))].filter((r,i,a)=>a.findIndex(x=>fescoKey115(x.st)===fescoKey115(r.st))===i) : originalList115;
   if (!list.some(r => r.st === calc.pst)) calc.pst = list.length ? list[0].st : "";
   d.append(h("div", { class: "ctl2" },
     seg((pd.labels ? [pd.labels.kp, pd.labels.od] : ["Контейнерный поезд", "Одиночные / группа"]).concat(wgL.length ? [(pd.labels && pd.labels.wg) || "Повагонная отправка"] : []), calc.pm, i => { calc.pm = i; draw(); }),
@@ -1340,7 +1346,7 @@ function portBlock(draw) {
     seg(PSZ, calc.psz, i => { calc.psz = i; draw(); }),
     h("div", { style: "display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:6px 0" },
       h("label", { style: "display:flex;align-items:center;gap:8px" }, h("input", { type: "checkbox", checked: calc.pg, onchange: e => { calc.pg = e.target.checked; draw(); } }), "С охраной"),
-      pd.id === "vmtp" ? h("label", { style: "display:flex;align-items:center;gap:8px" }, h("input", { type: "checkbox", checked: !!calc.pfescoDec, onchange: e => { calc.pfescoDec = e.target.checked; draw(); } }), "Тарифы с 01.12.2026") : null));
+      pd.id === "vmtp" ? h("label", { style: "display:flex;align-items:center;gap:8px" }, h("input", { type: "checkbox", checked: !!calc.pfescoDec, onchange: e => { calc.pfescoDec = e.target.checked; draw(); } }), "Сравнить с другим периодом") : null));
   if (!list.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px;margin:8px 0" }, "Для этого вида отправки ставок пока нет.")); return d; }
   const row = list.find(r => r.st === calc.pst);
   const prrs = pd.port.map((x, i) => ({ x, i })).filter(o => /^Перевалка/i.test(o.x.g));
@@ -1351,22 +1357,25 @@ function portBlock(draw) {
   const extras = pd.port.map((x, i) => ({ x, i })).filter(o => !/^Перевалка/i.test(o.x.g) && PEX.has(pd.id + "|" + o.i) && svp(o.x) != null);
   const exSum = extras.reduce((a, o) => a + svp(o.x), 0);
   const pn = row && row.p ? portNext(row) : { now: null, later: null };
-  const r = newMode114 && mkSelected114 !== "wg" ? fescoRate114(calc.pst, mkSelected114, calc.psz, calc.pg) :
-    pn.now ? portRail(pn.now, calc.psz, calc.pg) : { price: null, note: "Ставка не найдена." };
+  const hasCurrent115 = isFesco115 && !!fescoPeriod115(pd,mk115,false);
+  const useHistorical115 = isFesco115 && calc.pfescoDec && hasCurrent115 && !selectedPeriod115;
+  const r = isFesco115 && selectedPeriod115 ? fescoPrice115(selectedPeriod115,calc.pst,calc.psz,calc.pg) :
+    pn.now ? portRail(pn.now,calc.psz,calc.pg) : {price:null,note:'Ставка не найдена.'};
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const res = h("div", { class: "rc", style: "display:block" });
   const pfiles = pd.files || [], mk = ["kp", "od", "wg"][calc.pm];
   const fbtn = f => h("button", { title: "Открыть файл: " + f.t + (f.d ? " (загружен " + f.d + ")" : ""), style: "border:0;background:transparent;font-size:15px;line-height:1;padding:2px 4px;opacity:.75;cursor:pointer;flex:none", onclick: e => { e.stopPropagation(); openRateFile(f.id); } }, "📄");
   const railF = pfiles.filter(f => (f.w === "rail" || f.w === "both") && (f.m === "both" || f.m === "" || f.m === mk)), svcF = pfiles.filter(f => f.w === "svc" || f.w === "both");
-  res.append(line(h("span", {}, "🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (newMode114 ? " · тариф с 01.12.2026" : "") + (calc.pg ? " · с охраной" : ""), ...railF.map(fbtn)), r.price != null ? money(r.price) : "нет данных"));
+  res.append(line(h("span", {}, "🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (selectedPeriod115 ? " · тариф с " + selectedPeriod115.from : "") + (calc.pg ? " · с охраной" : ""), ...railF.map(fbtn)), r.price != null ? money(r.price) : "нет данных"));
   const gl = x => pd.vat ? x.g : x.g.replace(/\s*\(.*$/, "");
   if (noPrr) res.append(line("⚓ ПРР", "включён в ставку"));
   if (prr) res.append(line(h("span", {}, "⚓ ПРР: " + gl(prr.x) + " · " + prr.x.n.replace(/^Контейнер ИСО 20'\/40'\s*/i, ""), ...svcF.map(fbtn)), money(prr.x.p)));
   extras.forEach(o => res.append(line("➕ " + o.x.n, money(svp(o.x)))));
   res.append(line("Итого " + (pd.vat ? (pd.vat[mk] || "") : "без НДС"), r.price != null ? money(r.price + prrP + exSum) : "—", true));
   d.append(res);
-  if (!newMode114 && pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) d.append(h("div", { class: "note", style: "margin-top:6px;color:#d32f2f" }, "С " + pn.later.from + " ставка ЖД изменится: " + money(r2.price) + " (итого " + money(r2.price + prrP + exSum) + "). До этой даты действует цена выше.")); }
-  if (newMode114 && !futureRows114.length) d.append(h("div", { class: "note", style: "margin-top:6px;color:#b42318" }, "Тарифы FESCO с 01.12.2026 пока не найдены в таблице ЖД. Сначала примените предварительно проверенный импорт SOC/COC."));
+  if (!selectedPeriod115 && pn.later) { const r2 = portRail(pn.later, calc.psz, calc.pg); if (r2.price != null) d.append(h("div", { class: "note", style: "margin-top:6px;color:#d32f2f" }, "С " + pn.later.from + " ставка ЖД изменится: " + money(r2.price) + " (итого " + money(r2.price + prrP + exSum) + "). До этой даты действует цена выше.")); }
+
+  if (useHistorical115) d.append(h("div", {class:"note"}, "Показана сохранённая историческая ставка из базы порта, без автоматической замены."));
   if (r.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + r.note));
   if (pd.note) d.append(h("div", { class: "note", style: "margin-top:6px" }, "ℹ️ " + pd.note));
   if (prrs.length) d.append(h("div", { style: "margin:10px 0 4px;font-weight:600" }, "Вид ПРР"),
