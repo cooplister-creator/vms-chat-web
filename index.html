@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 116";
+const WEB_VERSION = "20.11.2026 · сборка 117";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1339,10 +1339,31 @@ function portBlock(draw) {
   const selectedPeriod115 = isFesco115 ? fescoPeriod115(pd, mk115, !!calc.pfescoDec) : null;
   const originalList115 = [pd.kp,pd.od,wgL][calc.pm] || pd.kp;
   const list = selectedPeriod115 ? [...originalList115,...(selectedPeriod115.rows||[]).filter(r=>!originalList115.some(o=>fescoKey115(o.st)===fescoKey115(r.st)))].filter((r,i,a)=>a.findIndex(x=>fescoKey115(x.st)===fescoKey115(r.st))===i) : originalList115;
-  if (!list.some(r => r.st === calc.pst)) calc.pst = list.length ? list[0].st : "";
+  // 117: выбранная станция сохраняется при SOC ↔ COC, даже если её название отличается.
+  // Никогда не переключаем молча на первую станцию другого тарифа.
+  const prevStation117 = calc.pst || "";
+  const stationKey117 = fescoKey115(prevStation117);
+  const exactStation117 = list.find(r => r.st === prevStation117) ||
+    (pd.id === "vmtp" && stationKey117 ? list.find(r => fescoKey115(r.st) === stationKey117) : null);
+  if (exactStation117) calc.pst = exactStation117.st;
+  else if (!prevStation117) calc.pst = list.length ? list[0].st : "";
+  else if (pd.id === "vmtp") {
+    // Если станции нет, сохраняем город и явно сообщаем об отсутствии тарифа.
+    const previousCity117 = stCity(prevStation117);
+    const sameCity117 = list.filter(r => stCity(r.st) === previousCity117);
+    if (sameCity117.length === 1) calc.pst = sameCity117[0].st;
+    else calc.pst = prevStation117;
+  } else calc.pst = list.length ? list[0].st : "";
+  const missingStation117 = !!calc.pst && !list.some(r => r.st === calc.pst);
+  const stationLabel117 = st => {
+    if (pd.id !== "vmtp") return st;
+    const city = stCity(st), key = fescoKey115(st);
+    if (!city || city === st || city === key) return st;
+    return /^.+\s*\([^()]+\)$/.test(st) ? st : city + " (" + st + ")";
+  };
   d.append(h("div", { class: "ctl2" },
     seg((pd.labels ? [pd.labels.kp, pd.labels.od] : ["Контейнерный поезд", "Одиночные / группа"]).concat(wgL.length ? [(pd.labels && pd.labels.wg) || "Повагонная отправка"] : []), calc.pm, i => { calc.pm = i; draw(); }),
-    h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...list.map(r => h("option", { value: r.st, selected: r.st === calc.pst }, r.st)))),
+    h("select", { class: "sel", title: "Станция назначения", onchange: e => { calc.pst = e.target.value; draw(); } }, ...(missingStation117 ? [h("option", { value: calc.pst, selected: true }, stationLabel117(calc.pst) + " — нет ставки в этом тарифе")] : []), ...list.map(r => h("option", { value: r.st, selected: r.st === calc.pst }, stationLabel117(r.st))))),
     seg(PSZ, calc.psz, i => { calc.psz = i; draw(); }),
     h("div", { style: "display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin:6px 0" },
       h("label", { style: "display:flex;align-items:center;gap:8px" }, h("input", { type: "checkbox", checked: calc.pg, onchange: e => { calc.pg = e.target.checked; draw(); } }), "С охраной"),
@@ -1359,7 +1380,8 @@ function portBlock(draw) {
   const pn = row && row.p ? portNext(row) : { now: null, later: null };
   const hasCurrent115 = isFesco115 && !!fescoPeriod115(pd,mk115,false);
   const useHistorical115 = isFesco115 && calc.pfescoDec && hasCurrent115 && !selectedPeriod115;
-  const r = isFesco115 && selectedPeriod115 ? fescoPrice115(selectedPeriod115,calc.pst,calc.psz,calc.pg) :
+  const r = missingStation117 ? {price:null,note:'Для выбранной станции в этом тарифе нет ставки. Выберите другую станцию вручную.'} :
+    isFesco115 && selectedPeriod115 ? fescoPrice115(selectedPeriod115,calc.pst,calc.psz,calc.pg) :
     pn.now ? portRail(pn.now,calc.psz,calc.pg) : {price:null,note:'Ставка не найдена.'};
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const res = h("div", { class: "rc", style: "display:block" });
