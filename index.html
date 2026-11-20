@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 122";
+const WEB_VERSION = "20.11.2026 · сборка 123";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1001,14 +1001,18 @@ function buildExperiment119(m) {
     // Порт: отдельные терминальные услуги, без автоматического двойного начисления ПРР.
     const port=section119('⚓ 2. Порт','Выбор источника ЖД-тарифа. ПРР не добавляется автоматически.');grid.append(port);
     if(spnRoute119){
-      port.append(h('div',{class:'note',style:'font-weight:700;margin:6px 0'},'Маршрут через '+e.pod+' · ЖД только СПН (Сухой порт Находка)'));
-      port.append(h('div',{class:'note'},'Другие ЖД-подрядчики и тарифы портов Владивостока для этого маршрута не предлагаются.'));
+      // Порт прибытия остаётся самостоятельной частью маршрута.
+      // Ограничение СПН касается только ЖД-подрядчиков, а не названия порта.
+      port.append(h('div',{class:'note',style:'margin-bottom:5px'},'Порт прибытия'));
+      port.append(h('div',{class:'sel',style:'display:flex;align-items:center;min-height:36px;font-weight:700'},e.pod));
+      port.append(h('div',{class:'note',style:'margin:8px 0 5px'},'ЖД-подрядчик: СПН · Сухой порт Находка'));
+      port.append(h('div',{class:'note'},'Тарифы портов Владивостока и других ЖД-подрядчиков для этого маршрута не подставляются.'));
     }else{
       port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;e.railCity='';e.destination='';e.railKey='';redraw();},'Источник ЖД'));
     }
     const pds=((PORT&&PORT.ports)||[]).filter(x=>(x.kp||[]).length||(x.od||[]).length||Object.values(x.periods||{}).some(a=>Array.isArray(a)&&a.some(p=>(p.rows||[]).length)));
     if(!PORT)loadPort(redraw);
-    if(e.railSource==='port'){
+    if(!spnRoute119&&e.railSource==='port'){
       port.append(choose119(pds.map(x=>({v:x.id,t:x.name})),e.portId,v=>{e.portId=v;e.portStation='';redraw();},'Выберите порт'));
       const pd=pds.find(x=>x.id===e.portId);
       if(pd){port.append(choose119([{v:'kp',t:(pd.labels&&pd.labels.kp)||'Контейнерный поезд'},{v:'od',t:(pd.labels&&pd.labels.od)||'Одиночная отправка / SOC'}],e.portMode,v=>{e.portMode=v;redraw();}));}
