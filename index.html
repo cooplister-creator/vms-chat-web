@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 121";
+const WEB_VERSION = "20.11.2026 · сборка 122";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -993,11 +993,19 @@ function buildExperiment119(m) {
     if(!choices.some(o=>o.i===e.sea))e.sea=-1;
     const frName=r=>(r[13]>-1&&FR.dict?FR.dict[r[13]]:'')||r[0]||'Перевозчик';
     sea.append(choose119(choices.map(o=>({v:o.i,t:frName(o.r)+' · '+o.r[4]+' · $'+o.r[e.size?6:5]+' · до '+(o.r[9]||'не указано')})),e.sea<0?'':e.sea,v=>{e.sea=v===''?-1:Number(v);redraw();},'Выберите морское предложение'));
+    // Находка и Восточный: только СПН. Не смешивать с ЖД-ставками Владивостока.
+    const spnRoute119=/находк|восточн/i.test(String(e.pod||''));
+    if(spnRoute119&&e.railSource!=='rail'){e.railSource='rail';e.portId='';e.portStation='';e.railCity='';e.destination='';e.railKey='';}
     const chosen=choices.find(o=>o.i===e.sea),seaUSD=chosen?Number(chosen.r[e.size?6:5]):null;
     sea.append(h('div',{class:'note'},chosen?'Море: $'+seaUSD+(usd119?' ≈ '+num119(seaUSD*usd119):' · курс USD недоступен'):'Морской фрахт пока не выбран'));
     // Порт: отдельные терминальные услуги, без автоматического двойного начисления ПРР.
     const port=section119('⚓ 2. Порт','Выбор источника ЖД-тарифа. ПРР не добавляется автоматически.');grid.append(port);
-    port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;redraw();},'Источник ЖД'));
+    if(spnRoute119){
+      port.append(h('div',{class:'note',style:'font-weight:700;margin:6px 0'},'Маршрут через '+e.pod+' · ЖД только СПН (Сухой порт Находка)'));
+      port.append(h('div',{class:'note'},'Другие ЖД-подрядчики и тарифы портов Владивостока для этого маршрута не предлагаются.'));
+    }else{
+      port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;e.railCity='';e.destination='';e.railKey='';redraw();},'Источник ЖД'));
+    }
     const pds=((PORT&&PORT.ports)||[]).filter(x=>(x.kp||[]).length||(x.od||[]).length||Object.values(x.periods||{}).some(a=>Array.isArray(a)&&a.some(p=>(p.rows||[]).length)));
     if(!PORT)loadPort(redraw);
     if(e.railSource==='port'){
@@ -1015,13 +1023,17 @@ function buildExperiment119(m) {
       // Режим ПВ определяется по явной отметке в тарифе, а не по названию подрядчика.
       // Без такой отметки тариф остаётся в обычной категории ФТГ (требует проверки условий).
       const pv119=r=>/полувагон|полувагонах|\bПВ\b|\(ПВ\)/i.test([r.station,r.mode,r.transport,r.notes,r.condition].filter(Boolean).join(' '));
-      const arr=activeRates().filter(r=>!r.arch&&!r.future&&!/^(?:ФЕСКО|FESCO)(?:\s|$)/i.test(r.contractor||'')&&r.type===(e.size===3?2:e.size)&&Number(r.price)>0);
+      const spnContractor119=r=>/СПН|СУХОЙ\s*ПОРТ\s*НАХОДК/i.test(String(r.contractor||''));
+      const arr=activeRates().filter(r=>!r.arch&&!r.future&&!/^(?:ФЕСКО|FESCO)(?:\s|$)/i.test(r.contractor||'')&&r.type===(e.size===3?2:e.size)&&Number(r.price)>0&&(!spnRoute119||spnContractor119(r)));
       const cityOf119=r=>String(r.city||'').trim()||((/\(([^()]+)\)\s*$/.exec(r.station||'')||[])[1]||String(r.station||'').trim());
       const cities=[...new Set(arr.map(cityOf119).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+      if(e.railCity&&!cities.includes(e.railCity)){e.railCity='';e.destination='';e.railKey='';}
+      if(spnRoute119)rail.append(h('div',{class:'note',style:'font-weight:700'},'ЖД-подрядчик: СПН · Сухой порт Находка'));
       rail.append(h('div',{class:'note'},'Направление (город назначения)'));
       rail.append(choose119(cities.map(v=>({v,t:v})),e.railCity,v=>{e.railCity=v;e.destination='';e.railKey='';redraw();},'Выберите направление'));
       const inCity=arr.filter(r=>cityOf119(r)===e.railCity);
       const stations=[...new Set(inCity.map(r=>String(r.station||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+      if(e.destination&&!stations.includes(e.destination)){e.destination='';e.railKey='';}
       rail.append(h('div',{class:'note'},'Станция / терминал назначения'));
       rail.append(choose119(stations.map(v=>({v,t:v})),e.destination,v=>{e.destination=v;e.railKey='';redraw();},'Выберите станцию'));
       rail.append(h('div',{class:'note'},'Тип отправки'));
@@ -1031,9 +1043,11 @@ function buildExperiment119(m) {
       const key=r=>[r.contractor,r.station,r.type,r.vat,r.from,r.to,r.price].join('|');
       rail.append(h('div',{class:'note'},'Ставка подрядчика · '+available.length+' предложений'));
       rail.append(choose119(available.map(r=>({v:key(r),t:r.contractor+' · '+num119(r.price)+' · НДС '+r.vat+'% · '+r.from+'–'+r.to+(pv119(r)?' · ПВ':' · ФТГ')})),e.railKey,v=>{e.railKey=v;redraw();},'Выберите ставку подрядчика'));
+      if(e.railKey&&!available.some(r=>key(r)===e.railKey))e.railKey='';
       const rr=available.find(r=>key(r)===e.railKey);
       if(rr){railPrice=Number(rr.price);railLabel=rr.contractor+' · '+rr.station+' · '+(pv119(rr)?'ПВ':'ФТГ');railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
       else if(e.destination&&!available.length)railNote='Для этой станции нет подтверждённых ставок '+(e.railMode==='pv'?'ПВ':'ФТГ')+' в текущем периоде.';
+      if(spnRoute119&&!arr.length)rail.append(h('div',{class:'note'},'Для СПН нет подходящих ставок в загруженной базе по выбранному типоразмеру. Ставки других подрядчиков не подставляются.'));
       rail.append(h('div',{class:'note'},'ПВ определяем только по отметке «полувагон» в данных тарифа. Остальные ставки показаны как ФТГ условно: тип отправки необходимо сверить с исходным документом.'));
     } else {
       const pd=pds.find(x=>x.id===e.portId);
