@@ -450,7 +450,7 @@ function buildShell() {
   const app = $("#app"); app.innerHTML = "";
   headEl = h("header", {});
   const nav = h("nav", {});
-  [["chats", "💬 Чаты"], ["alerts", "🚨 Срочные"], ["calc", "🚢 Расчёт"], ["depts", "🏢 Отделы"], ["legal", "⚖️ Юристы"], ["bot", "🤖 Помощник"]].forEach(([k, t]) =>
+  [["chats", "💬 Чаты"], ["experiment", "🧪 Эксперимент"], ["calc", "🚢 Расчёт"], ["depts", "🏢 Отделы"], ["legal", "⚖️ Юристы"], ["bot", "🤖 Помощник"]].forEach(([k, t]) =>
     nav.append(h("button", { "data-t": k, class: k === tab ? "on" : "", onclick: () => { tab = k; [...nav.children].forEach(b => b.classList.toggle("on", b.dataset.t === k)); renderTab(); } }, t)));
   app.append(headEl, nav, h("main", { id: "main" }));
   refreshHead(); renderTab();
@@ -470,6 +470,7 @@ function renderTab() {
   const m = $("#main"); m.innerHTML = "";
   if (tab === "chats") buildChats(m);
   else if (tab === "alerts") buildAlerts(m);
+  else if (tab === "experiment") buildExperiment119(m);
   else if (tab === "calc") buildCalc(m);
   else if (tab === "depts") buildDepts(m);
   else if (tab === "legal") buildLegal(m);
@@ -574,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 118";
+const WEB_VERSION = "20.11.2026 · сборка 119";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -958,6 +959,88 @@ function buildAlerts(m) {
         h("div", { style: "font-size:12px;color:var(--muted)" }, pad(dt.getDate()) + "." + pad(dt.getMonth() + 1) + " " + fmtTime(x.time || 0)))); });
   });
   const prev = unsubs.length; unsubs.push(un);
+}
+
+/* ---------- экспериментальный конструктор маршрута (119) ----------
+   Только чтение существующих ставок. Не записывает данные в GAS/Firestore. */
+const EXP119 = { pol:'', pod:'', sea:-1, destination:'', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', guard:false, extra:0, showAlerts:false };
+function buildExperiment119(m) {
+  const e=EXP119, page=h('div',{class:'page'}), w=h('div',{class:'wrap',style:'max-width:1180px'});
+  page.append(w);m.append(page);
+  function d119(s){const x=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s||'');return x?Number(x[3]+x[2]+x[1]):0;}
+  const today119=(()=>{const x=new Date();return x.getFullYear()*10000+(x.getMonth()+1)*100+x.getDate();})();
+  const usd119=RT&&RT.usd?Number(RT.usd.Value)/Number(RT.usd.Nominal||1):0;
+  const num119=n=>Number.isFinite(n)?money(Math.round(n)):'—';
+  function section119(title,help){return h('div',{class:'blk',style:'padding:16px;min-width:0'},h('div',{class:'bt'},title),h('div',{class:'note',style:'margin-bottom:10px'},help));}
+  function choose119(options,value,change,placeholder){return h('select',{class:'sel',style:'width:100%;margin:5px 0 9px',onchange:x=>change(x.target.value)},h('option',{value:'',selected:!value},placeholder||'Выберите…'),...options.map(o=>h('option',{value:String(o.v),selected:String(o.v)===String(value)},o.t)));}
+  function redraw(){w.innerHTML='';
+    w.append(h('div',{class:'tb'},h('b',{},'🧪 Экспериментальные инструменты · конструктор маршрута'),h('button',{class:'btn ghost',style:'font-size:12px',onclick:()=>{e.showAlerts=!e.showAlerts;redraw();}},e.showAlerts?'← К конструктору':'🚨 Срочные уведомления')));
+    if(e.showAlerts){const holder=h('div',{});w.append(holder);buildAlerts(holder);return;}
+    w.append(h('div',{class:'note',style:'margin:10px 0'},'Тестовый режим: тарифы используются только для чтения. Основной калькулятор и база не меняются. Все суммы требуют проверки условий и даты действия.'));
+    const grid=h('div',{class:'grid2 g3'});w.append(grid);
+    // Морской фрахт: только актуальные предложения COC/SOC до порта, без DROP.
+    const sea=section119('🚢 1. Морской фрахт','Китай → российский порт. Выберите конкретное предложение.');grid.append(sea);
+    if(!FR){loadFreight(redraw);sea.append(h('div',{},'Загружаю морские ставки…'));}
+    const frows=FR&&Array.isArray(FR.rows)?FR.rows:[];
+    const live=frows.map((r,i)=>({r,i})).filter(o=>o.r[3]===FR_PORT&&Number(o.r[e.size?6:5])>0&&(!d119(o.r[9])||d119(o.r[9])>=today119));
+    const pols=[...new Set(live.map(o=>o.r[1]))].sort((a,b)=>a.localeCompare(b,'ru'));
+    if(e.pol&&!pols.includes(e.pol)){e.pol='';e.sea=-1;}
+    sea.append(choose119(pols.map(v=>({v,t:v})),e.pol,v=>{e.pol=v;e.sea=-1;redraw();},'Порт отправления в Китае'));
+    const pods=[...new Set(live.filter(o=>o.r[1]===e.pol).map(o=>o.r[2]))].sort();
+    if(e.pod&&!pods.includes(e.pod)){e.pod='';e.sea=-1;}
+    sea.append(choose119(pods.map(v=>({v,t:v})),e.pod,v=>{e.pod=v;e.sea=-1;redraw();},'Порт прибытия'));
+    const choices=live.filter(o=>o.r[1]===e.pol&&o.r[2]===e.pod);
+    if(!choices.some(o=>o.i===e.sea))e.sea=-1;
+    const frName=r=>(r[13]>-1&&FR.dict?FR.dict[r[13]]:'')||r[0]||'Перевозчик';
+    sea.append(choose119(choices.map(o=>({v:o.i,t:frName(o.r)+' · '+o.r[4]+' · $'+o.r[e.size?6:5]+' · до '+(o.r[9]||'не указано')})),e.sea<0?'':e.sea,v=>{e.sea=v===''?-1:Number(v);redraw();},'Выберите морское предложение'));
+    const chosen=choices.find(o=>o.i===e.sea),seaUSD=chosen?Number(chosen.r[e.size?6:5]):null;
+    sea.append(h('div',{class:'note'},chosen?'Море: $'+seaUSD+(usd119?' ≈ '+num119(seaUSD*usd119):' · курс USD недоступен'):'Морской фрахт пока не выбран'));
+    // Порт: отдельные терминальные услуги, без автоматического двойного начисления ПРР.
+    const port=section119('⚓ 2. Порт','Выбор источника ЖД-тарифа. ПРР не добавляется автоматически.');grid.append(port);
+    port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;redraw();},'Источник ЖД'));
+    const pds=((PORT&&PORT.ports)||[]).filter(x=>(x.kp||[]).length||(x.od||[]).length);
+    if(!PORT)loadPort(redraw);
+    if(e.railSource==='port'){
+      port.append(choose119(pds.map(x=>({v:x.id,t:x.name})),e.portId,v=>{e.portId=v;e.portStation='';redraw();},'Выберите порт'));
+      const pd=pds.find(x=>x.id===e.portId);
+      if(pd){port.append(choose119([{v:'kp',t:(pd.labels&&pd.labels.kp)||'Контейнерный поезд'},{v:'od',t:(pd.labels&&pd.labels.od)||'Одиночная отправка / SOC'}],e.portMode,v=>{e.portMode=v;e.portStation='';redraw();}));}
+    }
+    port.append(h('div',{class:'note'},'В эксперименте не добавляем услуги порта автоматически: они могут уже входить в ЖД-ставку или фрахт. Терминальную обработку подключим после проверки состава тарифов.'));
+    // ЖД: конкретная ставка, не смешиваем с тарифами порта.
+    const rail=section119('🚆 3. Железная дорога','Выбор конкретного тарифа и станции назначения.');grid.append(rail);
+    rail.append(choose119([{v:0,t:"20′ до 24 т"},{v:1,t:"20′ 24–28 т"},{v:3,t:"40′ до 28 т"}],e.size,v=>{e.size=Number(v);e.sea=-1;e.railKey='';redraw();}));
+    let railPrice=null,railLabel='',railNote='';
+    if(e.railSource==='rail'){
+      if(!ratesLoaded)loadRates(redraw);
+      const arr=activeRates().filter(r=>!r.arch&&!r.future&&!/^(?:ФЕСКО|FESCO)(?:\s|$)/i.test(r.contractor||'')&&r.type===(e.size===3?2:e.size)&&Number(r.price)>0);
+      const stations=[...new Set(arr.map(r=>r.station))].sort((a,b)=>a.localeCompare(b,'ru'));
+      rail.append(choose119(stations.map(v=>({v,t:v})),e.destination,v=>{e.destination=v;e.railKey='';redraw();},'Станция назначения'));
+      const available=arr.filter(r=>r.station===e.destination);
+      const key=r=>[r.contractor,r.station,r.type,r.vat,r.from,r.to,r.price].join('|');
+      rail.append(choose119(available.map(r=>({v:key(r),t:r.contractor+' · '+num119(r.price)+' · НДС '+r.vat+'% · '+r.from+'–'+r.to})),e.railKey,v=>{e.railKey=v;redraw();},'Выберите ставку подрядчика'));
+      const rr=available.find(r=>key(r)===e.railKey);
+      if(rr){railPrice=Number(rr.price);railLabel=rr.contractor+' · '+rr.station;railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
+    } else {
+      const pd=pds.find(x=>x.id===e.portId),list=pd?(pd[e.portMode]||[]):[];
+      rail.append(choose119(list.map(r=>({v:r.st,t:r.st})),e.portStation,v=>{e.portStation=v;redraw();},'Станция назначения'));
+      const r=list.find(x=>x.st===e.portStation);
+      if(r){const now=portNext(r).now,pr=portRail(now,e.size,false);if(pr.price!=null&&Number(pr.price)>0){railPrice=Number(pr.price);railLabel=pd.name+' → '+r.st;railNote='Ставка порта · без охраны · '+(pd.railPeriod||'период уточняется');}else railNote='Нет ставки для этого типоразмера.';}
+    }
+    rail.append(h('div',{class:'note'},railPrice!==null?'Выбрано: '+num119(railPrice)+' · '+railNote:(railNote||'Выберите станцию и тариф.')));
+    // Дополнительные расходы вводятся только вручную и явно отмечаются как оценка.
+    const extra=section119('🧾 4. Дополнительные расходы','Только подтверждённые отдельные расходы, без автоматического ПРР и охраны.');grid.append(extra);
+    extra.append(h('label',{},'Дополнительные расходы, ₽ (вручную)'),h('input',{class:'field',type:'number',min:'0',step:'1',value:String(e.extra),onchange:x=>{e.extra=Math.max(0,Number(x.target.value)||0);redraw();}}));
+    extra.append(h('div',{class:'note'},'Перед добавлением проверьте, не включена ли услуга в ставку. НДС ручной суммы отдельно не пересчитывается.'));
+    const summary=h('div',{class:'blk',style:'margin-top:12px;padding:18px'},h('div',{class:'bt'},'📋 Итог маршрута · предварительный расчёт'));w.append(summary);
+    const canSea=seaUSD!==null&&usd119>0,canRail=railPrice!==null;
+    const add=(label,price,desc)=>summary.append(h('div',{class:'line',style:'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap'},h('span',{},label+(desc?' · '+desc:'')),h('b',{},price)));
+    add('Морской фрахт',canSea?num119(seaUSD*usd119):'не выбран',chosen?'$'+seaUSD:'');
+    add('ЖД-перевозка',canRail?num119(railPrice):'не выбрана',railLabel);
+    add('Дополнительные расходы',num119(e.extra),'вручную');
+    if(canSea&&canRail){const total=seaUSD*usd119+railPrice+e.extra;summary.append(h('h2',{style:'margin:14px 0 4px'},'Предварительный итог: '+num119(total)),h('div',{class:'note'},'Сумма ориентировочная: курс ЦБ, НДС в тарифах может различаться. Терминальные расходы, охрана и ПРР не включены автоматически. Проверьте совместимость условий море/ЖД и тип контейнера.'));}
+    else summary.append(h('div',{class:'note',style:'margin-top:10px'},'Для итоговой суммы выберите морское предложение, ЖД-ставку и дождитесь загрузки курса USD.'));
+  }
+  redraw();
 }
 
 /* ---------- расчёт ставки ---------- */
