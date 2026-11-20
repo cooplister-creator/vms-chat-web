@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 120";
+const WEB_VERSION = "20.11.2026 · сборка 121";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -998,12 +998,12 @@ function buildExperiment119(m) {
     // Порт: отдельные терминальные услуги, без автоматического двойного начисления ПРР.
     const port=section119('⚓ 2. Порт','Выбор источника ЖД-тарифа. ПРР не добавляется автоматически.');grid.append(port);
     port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;redraw();},'Источник ЖД'));
-    const pds=((PORT&&PORT.ports)||[]).filter(x=>(x.kp||[]).length||(x.od||[]).length);
+    const pds=((PORT&&PORT.ports)||[]).filter(x=>(x.kp||[]).length||(x.od||[]).length||Object.values(x.periods||{}).some(a=>Array.isArray(a)&&a.some(p=>(p.rows||[]).length)));
     if(!PORT)loadPort(redraw);
     if(e.railSource==='port'){
       port.append(choose119(pds.map(x=>({v:x.id,t:x.name})),e.portId,v=>{e.portId=v;e.portStation='';redraw();},'Выберите порт'));
       const pd=pds.find(x=>x.id===e.portId);
-      if(pd){port.append(choose119([{v:'kp',t:(pd.labels&&pd.labels.kp)||'Контейнерный поезд'},{v:'od',t:(pd.labels&&pd.labels.od)||'Одиночная отправка / SOC'}],e.portMode,v=>{e.portMode=v;e.portStation='';redraw();}));}
+      if(pd){port.append(choose119([{v:'kp',t:(pd.labels&&pd.labels.kp)||'Контейнерный поезд'},{v:'od',t:(pd.labels&&pd.labels.od)||'Одиночная отправка / SOC'}],e.portMode,v=>{e.portMode=v;redraw();}));}
     }
     port.append(h('div',{class:'note'},'В эксперименте не добавляем услуги порта автоматически: они могут уже входить в ЖД-ставку или фрахт. Терминальную обработку подключим после проверки состава тарифов.'));
     // ЖД: конкретная ставка, не смешиваем с тарифами порта.
@@ -1036,10 +1036,26 @@ function buildExperiment119(m) {
       else if(e.destination&&!available.length)railNote='Для этой станции нет подтверждённых ставок '+(e.railMode==='pv'?'ПВ':'ФТГ')+' в текущем периоде.';
       rail.append(h('div',{class:'note'},'ПВ определяем только по отметке «полувагон» в данных тарифа. Остальные ставки показаны как ФТГ условно: тип отправки необходимо сверить с исходным документом.'));
     } else {
-      const pd=pds.find(x=>x.id===e.portId),list=pd?(pd[e.portMode]||[]):[];
-      rail.append(choose119(list.map(r=>({v:r.st,t:r.st})),e.portStation,v=>{e.portStation=v;redraw();},'Станция назначения'));
+      const pd=pds.find(x=>x.id===e.portId);
+      const base=pd?(pd[e.portMode]||[]):[];
+      // Для ВМТП действующие и будущие редакции лежат в periods, а не всегда в kp/od.
+      // Не скрываем станции только потому, что исходный список текущей редакции пуст.
+      const versions=pd&&pd.id==='vmtp'?((pd.periods||{})[e.portMode]||[]):[];
+      const period=pd&&pd.id==='vmtp'?fescoPeriod115(pd,e.portMode,false):null;
+      const allRows=[...base];
+      versions.forEach(v=>(v.rows||[]).forEach(r=>{if(!allRows.some(x=>fescoKey115(x.st)===fescoKey115(r.st)))allRows.push(r);}));
+      const list=allRows.filter(r=>r&&r.st);
+      if(e.portStation&&!list.some(r=>r.st===e.portStation)){
+        const equivalent=list.find(r=>fescoKey115(r.st)===fescoKey115(e.portStation));
+        if(equivalent)e.portStation=equivalent.st;
+      }
+      rail.append(choose119(list.map(r=>({v:r.st,t:typeof stationLabel117==='function'?stationLabel117(r.st):r.st})),e.portStation,v=>{e.portStation=v;redraw();},'Станция назначения'));
       const r=list.find(x=>x.st===e.portStation);
-      if(r){const now=portNext(r).now,pr=portRail(now,e.size,false);if(pr.price!=null&&Number(pr.price)>0){railPrice=Number(pr.price);railLabel=pd.name+' → '+r.st;railNote='Ставка порта · без охраны · '+(pd.railPeriod||'период уточняется');}else railNote='Нет ставки для этого типоразмера.';}
+      if(r){
+        const pr=pd.id==='vmtp'&&period?fescoPrice115(period,r.st,e.size,false):portRail(portNext(r).now,e.size,false);
+        if(pr.price!=null&&Number(pr.price)>0){railPrice=Number(pr.price);railLabel=pd.name+' → '+r.st;railNote=(pr.note||'Ставка порта · без охраны')+' · '+(period?'с '+period.from:(pd.railPeriod||'период уточняется'));}
+        else railNote=pr.note||'Нет ставки для этого типоразмера.';
+      }else if(!list.length)railNote='Станции для этого порта и типа отправки не найдены. Проверьте загрузку тарифов и выбранный SOC/COC.';
     }
     rail.append(h('div',{class:'note'},railPrice!==null?'Выбрано: '+num119(railPrice)+' · '+railNote:(railNote||'Выберите станцию и тариф.')));
     // Дополнительные расходы вводятся только вручную и явно отмечаются как оценка.
