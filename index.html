@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 119";
+const WEB_VERSION = "20.11.2026 · сборка 120";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -963,7 +963,7 @@ function buildAlerts(m) {
 
 /* ---------- экспериментальный конструктор маршрута (119) ----------
    Только чтение существующих ставок. Не записывает данные в GAS/Firestore. */
-const EXP119 = { pol:'', pod:'', sea:-1, destination:'', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', guard:false, extra:0, showAlerts:false };
+const EXP119 = { pol:'', pod:'', sea:-1, destination:'', railCity:'', railMode:'ftg', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', guard:false, extra:0, showAlerts:false };
 function buildExperiment119(m) {
   const e=EXP119, page=h('div',{class:'page'}), w=h('div',{class:'wrap',style:'max-width:1180px'});
   page.append(w);m.append(page);
@@ -1012,14 +1012,29 @@ function buildExperiment119(m) {
     let railPrice=null,railLabel='',railNote='';
     if(e.railSource==='rail'){
       if(!ratesLoaded)loadRates(redraw);
+      // Режим ПВ определяется по явной отметке в тарифе, а не по названию подрядчика.
+      // Без такой отметки тариф остаётся в обычной категории ФТГ (требует проверки условий).
+      const pv119=r=>/полувагон|полувагонах|\bПВ\b|\(ПВ\)/i.test([r.station,r.mode,r.transport,r.notes,r.condition].filter(Boolean).join(' '));
       const arr=activeRates().filter(r=>!r.arch&&!r.future&&!/^(?:ФЕСКО|FESCO)(?:\s|$)/i.test(r.contractor||'')&&r.type===(e.size===3?2:e.size)&&Number(r.price)>0);
-      const stations=[...new Set(arr.map(r=>r.station))].sort((a,b)=>a.localeCompare(b,'ru'));
-      rail.append(choose119(stations.map(v=>({v,t:v})),e.destination,v=>{e.destination=v;e.railKey='';redraw();},'Станция назначения'));
-      const available=arr.filter(r=>r.station===e.destination);
+      const cityOf119=r=>String(r.city||'').trim()||((/\(([^()]+)\)\s*$/.exec(r.station||'')||[])[1]||String(r.station||'').trim());
+      const cities=[...new Set(arr.map(cityOf119).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+      rail.append(h('div',{class:'note'},'Направление (город назначения)'));
+      rail.append(choose119(cities.map(v=>({v,t:v})),e.railCity,v=>{e.railCity=v;e.destination='';e.railKey='';redraw();},'Выберите направление'));
+      const inCity=arr.filter(r=>cityOf119(r)===e.railCity);
+      const stations=[...new Set(inCity.map(r=>String(r.station||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ru'));
+      rail.append(h('div',{class:'note'},'Станция / терминал назначения'));
+      rail.append(choose119(stations.map(v=>({v,t:v})),e.destination,v=>{e.destination=v;e.railKey='';redraw();},'Выберите станцию'));
+      rail.append(h('div',{class:'note'},'Тип отправки'));
+      rail.append(choose119([{v:'ftg',t:'ФТГ · обычная отправка'},{v:'pv',t:'ПВ · полувагоны'}],e.railMode,v=>{e.railMode=v;e.railKey='';redraw();},'Тип отправки'));
+      const stationRows=inCity.filter(r=>String(r.station||'').trim()===e.destination);
+      const available=stationRows.filter(r=>pv119(r)===(e.railMode==='pv'));
       const key=r=>[r.contractor,r.station,r.type,r.vat,r.from,r.to,r.price].join('|');
-      rail.append(choose119(available.map(r=>({v:key(r),t:r.contractor+' · '+num119(r.price)+' · НДС '+r.vat+'% · '+r.from+'–'+r.to})),e.railKey,v=>{e.railKey=v;redraw();},'Выберите ставку подрядчика'));
+      rail.append(h('div',{class:'note'},'Ставка подрядчика · '+available.length+' предложений'));
+      rail.append(choose119(available.map(r=>({v:key(r),t:r.contractor+' · '+num119(r.price)+' · НДС '+r.vat+'% · '+r.from+'–'+r.to+(pv119(r)?' · ПВ':' · ФТГ')})),e.railKey,v=>{e.railKey=v;redraw();},'Выберите ставку подрядчика'));
       const rr=available.find(r=>key(r)===e.railKey);
-      if(rr){railPrice=Number(rr.price);railLabel=rr.contractor+' · '+rr.station;railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
+      if(rr){railPrice=Number(rr.price);railLabel=rr.contractor+' · '+rr.station+' · '+(pv119(rr)?'ПВ':'ФТГ');railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
+      else if(e.destination&&!available.length)railNote='Для этой станции нет подтверждённых ставок '+(e.railMode==='pv'?'ПВ':'ФТГ')+' в текущем периоде.';
+      rail.append(h('div',{class:'note'},'ПВ определяем только по отметке «полувагон» в данных тарифа. Остальные ставки показаны как ФТГ условно: тип отправки необходимо сверить с исходным документом.'));
     } else {
       const pd=pds.find(x=>x.id===e.portId),list=pd?(pd[e.portMode]||[]):[];
       rail.append(choose119(list.map(r=>({v:r.st,t:r.st})),e.portStation,v=>{e.portStation=v;redraw();},'Станция назначения'));
