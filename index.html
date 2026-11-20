@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "20.11.2026 · сборка 123";
+const WEB_VERSION = "20.11.2026 · сборка 125";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -963,7 +963,7 @@ function buildAlerts(m) {
 
 /* ---------- экспериментальный конструктор маршрута (119) ----------
    Только чтение существующих ставок. Не записывает данные в GAS/Firestore. */
-const EXP119 = { pol:'', pod:'', sea:-1, destination:'', railCity:'', railMode:'ftg', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', guard:false, extra:0, showAlerts:false };
+const EXP119 = { pol:'', pod:'', sea:-1, destination:'', railCity:'', railMode:'ftg', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', eastMode:'terminal', eastPrr:'', eastPrrOn:false, guard:false, railPrrAuto:false, railHeavy:false, extra:0, showAlerts:false };
 function buildExperiment119(m) {
   const e=EXP119, page=h('div',{class:'page'}), w=h('div',{class:'wrap',style:'max-width:1180px'});
   page.append(w);m.append(page);
@@ -1005,8 +1005,23 @@ function buildExperiment119(m) {
       // Ограничение СПН касается только ЖД-подрядчиков, а не названия порта.
       port.append(h('div',{class:'note',style:'margin-bottom:5px'},'Порт прибытия'));
       port.append(h('div',{class:'sel',style:'display:flex;align-items:center;min-height:36px;font-weight:700'},e.pod));
-      port.append(h('div',{class:'note',style:'margin:8px 0 5px'},'ЖД-подрядчик: СПН · Сухой порт Находка'));
-      port.append(h('div',{class:'note'},'Тарифы портов Владивостока и других ЖД-подрядчиков для этого маршрута не подставляются.'));
+      port.append(h('div',{class:'note',style:'margin:9px 0 4px'},'Вариант отправки из порта'));
+      port.append(choose119([{v:'terminal',t:'На терминал СПН (Сухой порт Находка)'},{v:'direct',t:'ЖД непосредственно с порта ВСК'}],e.eastMode,v=>{e.eastMode=v;e.railCity='';e.destination='';e.railKey='';e.portStation='';redraw();},'Выберите вариант'));
+      const vsk124=((PORT&&PORT.ports)||[]).find(x=>x.id==='vsk');
+      if(!PORT)loadPort(redraw);
+      port.append(h('div',{class:'note',style:'margin:8px 0 4px;font-weight:700'},'Порт ВСК (Врангель) · тарифы терминала'));
+      if(vsk124){
+        const prrs124=(vsk124.port||[]).map((x,i)=>({x,i})).filter(o=>/^Перевалка/i.test(String(o.x.g||''))&&Number(o.x.p)>0);
+        port.append(h('div',{class:'note'},'ПРР и портовые услуги берутся из действующей базы ВСК, а не из тарифов СПН.'));
+        if(prrs124.length){
+          if(!prrs124.some(o=>String(o.i)===e.eastPrr))e.eastPrr=String(prrs124[0].i);
+          port.append(choose119(prrs124.map(o=>({v:o.i,t:o.x.n+' · '+num119(Number(o.x.p))})),e.eastPrr,v=>{e.eastPrr=v;redraw();},'Выберите вид ПРР'));
+          port.append(h('label',{style:'display:flex;align-items:center;gap:8px;font-size:12px;margin:5px 0'},h('input',{type:'checkbox',checked:!!e.eastPrrOn,onchange:x=>{e.eastPrrOn=x.target.checked;redraw();}}),'Добавить выбранный ПРР к расчёту (если не включён в ЖД/фрахт)'));
+        }else port.append(h('div',{class:'note'},'В базе ВСК не найдены позиции ПРР. Проверьте тарифное приложение.'));
+        const other124=(vsk124.port||[]).filter(x=>Number(x.p)>0&&!/^Перевалка/i.test(String(x.g||'')));
+        if(other124.length)port.append(h('details',{style:'margin-top:7px'},h('summary',{style:'cursor:pointer;font-size:12px'},'Другие услуги ВСК · '+other124.length),...other124.map(x=>h('div',{class:'note',style:'padding:4px 0;border-bottom:1px solid var(--line)'},(x.g?x.g+' · ':'')+x.n+' — '+num119(Number(x.p))))));
+      }else port.append(h('div',{class:'note'},PORT?'Тарифы ВСК не найдены в базе.':'Загружаю тарифы ВСК…'));
+      port.append(h('div',{class:'note',style:'margin-top:7px'},e.eastMode==='terminal'?'ЖД-подрядчик: СПН · Сухой порт Находка':'ЖД непосредственно с порта: ставки ВСК (если загружены).'));
     }else{
       port.append(choose119([{v:'rail',t:'ЖД от подрядчиков (общая база)'},{v:'port',t:'ЖД от выбранного порта'}],e.railSource,v=>{e.railSource=v;e.railCity='';e.destination='';e.railKey='';redraw();},'Источник ЖД'));
     }
@@ -1017,12 +1032,12 @@ function buildExperiment119(m) {
       const pd=pds.find(x=>x.id===e.portId);
       if(pd){port.append(choose119([{v:'kp',t:(pd.labels&&pd.labels.kp)||'Контейнерный поезд'},{v:'od',t:(pd.labels&&pd.labels.od)||'Одиночная отправка / SOC'}],e.portMode,v=>{e.portMode=v;redraw();}));}
     }
-    port.append(h('div',{class:'note'},'В эксперименте не добавляем услуги порта автоматически: они могут уже входить в ЖД-ставку или фрахт. Терминальную обработку подключим после проверки состава тарифов.'));
+    if(!spnRoute119)port.append(h('div',{class:'note'},'Портовые услуги не добавляются автоматически, чтобы избежать двойного учёта.'));
     // ЖД: конкретная ставка, не смешиваем с тарифами порта.
     const rail=section119('🚆 3. Железная дорога','Выбор конкретного тарифа и станции назначения.');grid.append(rail);
     rail.append(choose119([{v:0,t:"20′ до 24 т"},{v:1,t:"20′ 24–28 т"},{v:3,t:"40′ до 28 т"}],e.size,v=>{e.size=Number(v);e.sea=-1;e.railKey='';redraw();}));
-    let railPrice=null,railLabel='',railNote='';
-    if(e.railSource==='rail'){
+    let railPrice=null,railLabel='',railNote='',railSelected=null,railGuard=0,railExtras=0,railVat=0;
+    if(e.railSource==='rail'&&!(spnRoute119&&e.eastMode==='direct')){
       if(!ratesLoaded)loadRates(redraw);
       // Режим ПВ определяется по явной отметке в тарифе, а не по названию подрядчика.
       // Без такой отметки тариф остаётся в обычной категории ФТГ (требует проверки условий).
@@ -1047,15 +1062,33 @@ function buildExperiment119(m) {
       const key=r=>[r.contractor,r.station,r.type,r.vat,r.from,r.to,r.price].join('|');
       rail.append(h('div',{class:'note'},'Ставка подрядчика · '+available.length+' предложений'));
       rail.append(choose119(available.map(r=>({v:key(r),t:r.contractor+' · '+num119(r.price)+' · НДС '+r.vat+'% · '+r.from+'–'+r.to+(pv119(r)?' · ПВ':' · ФТГ')})),e.railKey,v=>{e.railKey=v;redraw();},'Выберите ставку подрядчика'));
+      if(available.length)rail.append(h('div',{style:'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:6px 0'},...available.slice().sort((a,b)=>Number(a.price)-Number(b.price)).map(r=>h('button',{class:'rc',style:'cursor:pointer;text-align:left;border:2px solid '+(e.railKey===key(r)?'#1f5fae':'transparent')+';padding:8px;display:block',onclick:()=>{e.railKey=key(r);redraw();}},h('div',{style:'font-weight:800'},num119(Number(r.price))),h('div',{style:'font-size:12px'},r.contractor),h('div',{class:'note'},'НДС '+r.vat+'% · '+(pv119(r)?'ПВ':'ФТГ')+' · с '+r.from)))));
+
       if(e.railKey&&!available.some(r=>key(r)===e.railKey))e.railKey='';
       const rr=available.find(r=>key(r)===e.railKey);
-      if(rr){railPrice=Number(rr.price);railLabel=rr.contractor+' · '+rr.station+' · '+(pv119(rr)?'ПВ':'ФТГ');railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
+      if(rr){railPrice=Number(rr.price);railSelected=rr;railVat=Number(rr.vat)||0;railLabel=rr.contractor+' · '+rr.station+' · '+(pv119(rr)?'ПВ':'ФТГ');railNote='НДС '+rr.vat+'% · '+rr.from+'–'+rr.to;}
       else if(e.destination&&!available.length)railNote='Для этой станции нет подтверждённых ставок '+(e.railMode==='pv'?'ПВ':'ФТГ')+' в текущем периоде.';
       if(spnRoute119&&!arr.length)rail.append(h('div',{class:'note'},'Для СПН нет подходящих ставок в загруженной базе по выбранному типоразмеру. Ставки других подрядчиков не подставляются.'));
+      // Те же дополнительные начисления, что в основном ЖД-калькуляторе.
+      if(railSelected){
+        const factor=railVat===22?1.22:1;
+        const isSpn=/СПН|СУХОЙ\s*ПОРТ/i.test(String(railSelected.contractor||''));
+        const option=(checked,caption,change)=>h('label',{style:'display:flex;align-items:center;gap:8px;margin:7px 0;font-size:12px'},h('input',{type:'checkbox',checked:!!checked,onchange:x=>{change(x.target.checked);redraw();}}),caption);
+        rail.append(h('div',{class:'note',style:'font-weight:700;margin-top:8px'},'Доплаты по выбранной ЖД-ставке'));
+        rail.append(option(e.guard,'С охраной'+(Number(railSelected.guard)>0?' (+'+num119(Number(railSelected.guard))+')':' (сумма в тарифе не указана)'),v=>e.guard=v));
+        if(e.guard&&Number(railSelected.guard)>0)railGuard=Number(railSelected.guard);
+        if(!isSpn&&!spnRoute119){
+          rail.append(option(e.railPrrAuto,'ПРР + автовывоз (+'+num119(Math.round((RADD.prr+RADD.auto)*factor))+')',v=>e.railPrrAuto=v));
+          rail.append(option(e.railHeavy,'Вес свыше 20 т: надбавка АТК/ЮНИОН (+'+num119(Math.round(RADD.heavy*factor))+')',v=>e.railHeavy=v));
+          if(e.railPrrAuto)railExtras+=Math.round((RADD.prr+RADD.auto)*factor);
+          if(e.railHeavy&&RADD.heavyRe.test(String(railSelected.contractor||'')))railExtras+=Math.round(RADD.heavy*factor);
+        }else if(isSpn)rail.append(h('div',{class:'note'},'СПН: ПРР ВСК выбирается отдельно в блоке «Порт». Повторно ПРР + автовывоз не начисляем.'));
+        rail.append(h('div',{class:'note'},'Базовая ставка: '+num119(railPrice)+' · охрана: '+num119(railGuard)+' · доплаты: '+num119(railExtras)+' · НДС ставки: '+railVat+'%'));
+      }
       rail.append(h('div',{class:'note'},'ПВ определяем только по отметке «полувагон» в данных тарифа. Остальные ставки показаны как ФТГ условно: тип отправки необходимо сверить с исходным документом.'));
     } else {
-      const pd=pds.find(x=>x.id===e.portId);
-      const base=pd?(pd[e.portMode]||[]):[];
+      const pd=pds.find(x=>x.id===(spnRoute119?'vsk':e.portId));
+      const base=pd?(pd[spnRoute119?'kp':e.portMode]||[]):[];
       // Для ВМТП действующие и будущие редакции лежат в periods, а не всегда в kp/od.
       // Не скрываем станции только потому, что исходный список текущей редакции пуст.
       const versions=pd&&pd.id==='vmtp'?((pd.periods||{})[e.portMode]||[]):[];
@@ -1085,8 +1118,17 @@ function buildExperiment119(m) {
     const add=(label,price,desc)=>summary.append(h('div',{class:'line',style:'display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap'},h('span',{},label+(desc?' · '+desc:'')),h('b',{},price)));
     add('Морской фрахт',canSea?num119(seaUSD*usd119):'не выбран',chosen?'$'+seaUSD:'');
     add('ЖД-перевозка',canRail?num119(railPrice):'не выбрана',railLabel);
+    if(railSelected){
+      add('Охрана ЖД',railGuard?num119(railGuard):'не добавлена',e.guard&&!railGuard?'В тарифе нет суммы охраны':'');
+      if(!spnRoute119)add('ПРР, автовывоз и весовые надбавки',railExtras?num119(railExtras):'не добавлены','по правилам основного ЖД-калькулятора');
+    }
+
+    const vskForTotal124=spnRoute119?((PORT&&PORT.ports)||[]).find(x=>x.id==='vsk'):null;
+    const prrForTotal124=vskForTotal124&&e.eastPrrOn?(vskForTotal124.port||[])[Number(e.eastPrr)]:null;
+    const portPrice124=prrForTotal124&&Number(prrForTotal124.p)>0?Number(prrForTotal124.p):0;
+    if(spnRoute119)add('ПРР ВСК',portPrice124?num119(portPrice124):'не добавлен',portPrice124?(prrForTotal124.n||''):'проверить, не включён ли в ЖД-ставку');
     add('Дополнительные расходы',num119(e.extra),'вручную');
-    if(canSea&&canRail){const total=seaUSD*usd119+railPrice+e.extra;summary.append(h('h2',{style:'margin:14px 0 4px'},'Предварительный итог: '+num119(total)),h('div',{class:'note'},'Сумма ориентировочная: курс ЦБ, НДС в тарифах может различаться. Терминальные расходы, охрана и ПРР не включены автоматически. Проверьте совместимость условий море/ЖД и тип контейнера.'));}
+    if(canSea&&canRail){const total=seaUSD*usd119+railPrice+railGuard+railExtras+e.extra+portPrice124;summary.append(h('h2',{style:'margin:14px 0 4px'},'Предварительный итог: '+num119(total)),h('div',{class:'note'},'Сумма ориентировочная: курс ЦБ, НДС в тарифах может различаться. ПРР ВСК включается только вручную после проверки, охрана и доплаты учитываются только по выбранным галочкам; проверьте включённые услуги. Проверьте совместимость условий море/ЖД и тип контейнера.'));}
     else summary.append(h('div',{class:'note',style:'margin-top:10px'},'Для итоговой суммы выберите морское предложение, ЖД-ставку и дождитесь загрузки курса USD.'));
   }
   redraw();
