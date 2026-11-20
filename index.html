@@ -574,7 +574,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "19.11.2026 · сборка 115";
+const WEB_VERSION = "20.11.2026 · сборка 116";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1363,7 +1363,12 @@ function portBlock(draw) {
     pn.now ? portRail(pn.now,calc.psz,calc.pg) : {price:null,note:'Ставка не найдена.'};
   const line = (a, b, bold) => h("div", { style: "display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);" + (bold ? "font-weight:700;font-size:16px;border-bottom:0;padding-top:9px" : "") }, h("span", {}, a), h("span", { style: "white-space:nowrap" }, b));
   const res = h("div", { class: "rc", style: "display:block" });
-  const pfiles = pd.files || [], mk = ["kp", "od", "wg"][calc.pm];
+  const pfiles = [...(pd.files || [])].sort((a,b) => {
+    const key = f => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(f.effective || ''); return m ? +(`${m[3]}${m[2]}${m[1]}`) : 0; };
+    return key(b)-key(a) || String(a.t).localeCompare(String(b.t),'ru');
+  });
+  const tariffFileLabel116 = f => f.t + (f.effective ? ' · действует с ' + f.effective : ' · дата действия не указана');
+  const mk = ["kp", "od", "wg"][calc.pm];
   const fbtn = f => h("button", { title: "Открыть файл: " + f.t + (f.d ? " (загружен " + f.d + ")" : ""), style: "border:0;background:transparent;font-size:15px;line-height:1;padding:2px 4px;opacity:.75;cursor:pointer;flex:none", onclick: e => { e.stopPropagation(); openRateFile(f.id); } }, "📄");
   const railF = pfiles.filter(f => (f.w === "rail" || f.w === "both") && (f.m === "both" || f.m === "" || f.m === mk)), svcF = pfiles.filter(f => f.w === "svc" || f.w === "both");
   res.append(line(h("span", {}, "🚆 ЖД: порт " + pd.name.replace(/\s*\(.*$/, "") + " → " + calc.pst + " · " + PSZ[calc.psz] + (selectedPeriod115 ? " · тариф с " + selectedPeriod115.from : "") + (calc.pg ? " · с охраной" : ""), ...railF.map(fbtn)), r.price != null ? money(r.price) : "нет данных"));
@@ -1393,8 +1398,8 @@ function portBlock(draw) {
       d.append(h("label", { style: "display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0" + (svp(x) == null ? ";opacity:.5" : "") }, cb, h("span", { style: "flex:1" }, x.n), h("span", { style: "white-space:nowrap" }, svp(x) == null ? "—" : money(svp(x)))));
     });
   }
-  if (pfiles.length) d.append(h("div", { style: "margin-top:12px" }, h("div", { style: "font-weight:600;font-size:13px;margin-bottom:4px" }, "📎 Тарифы порта (исходные файлы)"),
-    h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" }, ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", title: f.n, onclick: () => openRateFile(f.id) }, "📄 " + f.t + (f.d ? " · " + f.d : ""))))));
+  if (pfiles.length) d.append(h("div", { style: "margin-top:12px" }, h("div", { style: "font-weight:600;font-size:13px;margin-bottom:4px" }, "📎 Архив тарифов порта (по дате действия)"),
+    h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" }, ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", title: f.n + (f.d ? " · загружен " + f.d : ""), onclick: () => openRateFile(f.id) }, "📄 " + tariffFileLabel116(f))))));
   if (isAdmin) {
     const clr = async (key, what) => {
       if (!confirm("Убрать из порта «" + pd.name + "»: " + what + "?")) return;
@@ -1407,7 +1412,7 @@ function portBlock(draw) {
     };
     d.append(h("div", { style: "margin-top:12px" }, h("div", { style: "font-weight:600;font-size:13px;margin-bottom:4px" }, "🗑 Убрать загруженное (админ)"),
       h("div", { style: "display:flex;flex-wrap:wrap;gap:6px" },
-        ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", onclick: () => clr(f.k, f.t) }, "✕ " + f.t + (f.d ? " · " + f.d : ""))),
+        ...pfiles.map(f => h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", onclick: () => clr(f.k, f.t) }, "✕ " + tariffFileLabel116(f))),
         h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px", onclick: () => clr("*svc", "все услуги") }, "✕ Все услуги"),
         h("button", { class: "btn ghost", style: "padding:5px 10px;font-size:12px;color:#c0392b", onclick: () => clr("*all", "ВСЁ (ставки, услуги, файлы)") }, "✕ Весь порт"))));
   }
