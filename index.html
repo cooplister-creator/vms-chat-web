@@ -597,7 +597,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 135";
+const WEB_VERSION = "24.11.2026 · сборка 136";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1028,7 +1028,7 @@ function auto131Block(a,draw,locked=false){
  return b;
 }
 
-const EXP119 = { pol:'', pod:'', sea:-1, destination:'', railCity:'', railMode:'ftg', railContractor:'', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', eastMode:'terminal', eastPrr:'', eastPrrOn:false, guard:false, railPrrAuto:false, railPrr:false, railAuto:false, railHeavy:false, extra:0, showAlerts:false };
+const EXP119 = { country:'', pol:'', pod:'', sea:-1, destination:'', railCity:'', railMode:'ftg', railContractor:'', size:0, railSource:'rail', railKey:'', portId:'', portMode:'kp', portStation:'', eastMode:'terminal', eastPrr:'', eastPrrOn:false, guard:false, railPrrAuto:false, railPrr:false, railAuto:false, railHeavy:false, extra:0, showAlerts:false };
 function buildExperiment119(m) {
   const e=EXP119, page=h('div',{class:'page exp134-page'}), w=h('div',{class:'wrap exp134',style:'max-width:1500px'});
   page.append(w);m.append(page);
@@ -1044,13 +1044,17 @@ function buildExperiment119(m) {
     w.append(h('details',{class:'exp134-help'},h('summary',{},'Условия предварительного расчёта'),h('div',{class:'note'},'Тестовый режим: тарифы используются только для чтения. Основной калькулятор и база не меняются. Все суммы требуют проверки условий и даты действия.')));
     const route=h('div',{class:'exp134-route'});w.append(route); const grid=h('div',{class:'exp134-grid'}), left=h('div',{class:'exp134-col'}), right=h('div',{class:'exp134-col'});grid.append(left,right);w.append(grid);
     // Морской фрахт: только актуальные предложения COC/SOC до порта, без DROP.
-    const sea=section119('🚢 1. Морской фрахт','Китай → российский порт. Выберите конкретное предложение.');left.append(sea);
+    const sea=section119('🚢 1. Морской фрахт','Страна отправления → российский порт. Выберите конкретное предложение.');left.append(sea);
     if(!FR){loadFreight(redraw);sea.append(h('div',{},'Загружаю морские ставки…'));}
     const frows=FR&&Array.isArray(FR.rows)?FR.rows:[];
-    const live=frows.map((r,i)=>({r,i})).filter(o=>o.r[3]===FR_PORT&&Number(o.r[e.size?6:5])>0&&(!d119(o.r[9])||d119(o.r[9])>=today119));
+    const allLive=frows.map((r,i)=>({r,i})).filter(o=>o.r[3]===FR_PORT&&Number(o.r[e.size?6:5])>0&&(!d119(o.r[9])||d119(o.r[9])>=today119));
+    const countries=frCountries136(allLive.map(o=>o.r));
+    if(!countries.includes(e.country))e.country='';
+    sea.append(choose119(countries.map(v=>({v,t:v})),e.country,v=>{e.country=v;e.pol='';e.pod='';e.sea=-1;redraw();},'Страна отправления'));
+    const live=allLive.filter(o=>e.country&&frCountry136(o.r[1])===e.country);
     const pols=[...new Set(live.map(o=>o.r[1]))].sort((a,b)=>a.localeCompare(b,'ru'));
     if(e.pol&&!pols.includes(e.pol)){e.pol='';e.sea=-1;}
-    sea.append(choose119(pols.map(v=>({v,t:v})),e.pol,v=>{e.pol=v;e.sea=-1;redraw();},'Порт отправления в Китае'));
+    sea.append(choose119(pols.map(v=>({v,t:v})),e.pol,v=>{e.pol=v;e.sea=-1;redraw();},'Порт отправления'));
     const pods=[...new Set(live.filter(o=>o.r[1]===e.pol).map(o=>o.r[2]))].sort();
     if(e.pod&&!pods.includes(e.pod)){e.pod='';e.sea=-1;}
     sea.append(choose119(pods.map(v=>({v,t:v})),e.pod,v=>{e.pod=v;e.sea=-1;redraw();},'Порт прибытия'));
@@ -1223,7 +1227,7 @@ function buildExperiment119(m) {
 }
 
 /* ---------- расчёт ставки ---------- */
-let calc = { auto: false, orig: 0, rg: false, pfut: false, tprr: "", pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
+let calc = { auto: false, orig: 0, rg: false, pfut: false, tprr: "", pdest: 0, pterm: "", pgross: "", pvat: 0, rail: true, freight: true, port: false, pport: "", pm: 0, pst: "", psz: 0, pg: false, pprr: "", pexOpen: false, city: "Москва", type: 0, fcountry: "", fpol: "", fpod: "Владивосток", fcity: "Только порт", fsize: 0, fkind: 0 };
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
@@ -1707,6 +1711,15 @@ function portBlock(draw) {
 /* ---------- фрахт: реальные данные из таблицы «Фрахт» ---------- */
 let FR = null, frLoading = false;
 const FR_PORT = "Только порт";
+// Общий справочник стран для обоих калькуляторов фрахта.
+const FR_COUNTRY136 = {"BUSAN": "Южная Корея", "INCHEON": "Южная Корея", "KWANGYANG": "Южная Корея", "PUSAN": "Южная Корея", "ULSAN": "Южная Корея", "KOREA": "Южная Корея", "JAPAN": "Япония", "JAPAN MAIN PORTS": "Япония", "JAPAN LOCAL PORTS": "Япония", "YOKOHAMA": "Япония", "TOKYO": "Япония", "KOBE": "Япония", "NAGOYA": "Япония", "OSAKA": "Япония", "HAKATA": "Япония", "MOJI": "Япония", "NIIGATA": "Япония", "ONAHAMA": "Япония", "HACHINOHE": "Япония", "SENDAI": "Япония", "SHIMIZU": "Япония", "TOMAKOMAI": "Япония", "YOKKAICHI": "Япония", "AKITA": "Япония", "CHIBA": "Япония", "HIROSHIMA": "Япония", "IYOMISHIMA": "Япония", "KANAZAWA": "Япония", "MAIZURU": "Япония", "MIZUSHIMA": "Япония", "NAOETSU": "Япония", "SAKAIMINATO": "Япония", "TAKAMATSU": "Япония", "TOYOHASHI": "Япония", "TOYAMASHINKO": "Япония", "TSURUGA": "Япония", "WAKAYAMA": "Япония", "HAIPHONG": "Вьетнам", "HO CHI MINH": "Вьетнам", "DA NANG": "Вьетнам", "HAI PHONG": "Вьетнам", "HOCHIMINH": "Вьетнам", "VIETNAM": "Вьетнам", "KEELUNG": "Тайвань", "KAOHSIUNG": "Тайвань", "TAICHUNG": "Тайвань", "TAIPEI": "Тайвань", "TAIWAN": "Тайвань", "LAEM CHABANG": "Таиланд", "BANGKOK": "Таиланд", "THAILAND": "Таиланд", "JAKARTA": "Индонезия", "SURABAYA": "Индонезия", "SEMARANG": "Индонезия", "PALEMBANG": "Индонезия", "PADANG": "Индонезия", "MAKASAR": "Индонезия", "PANJANG": "Индонезия", "BELAWAN": "Индонезия", "INDONESIA": "Индонезия", "TANJUNG PELEPAS": "Малайзия", "PENANG": "Малайзия", "PASIR GUDANG": "Малайзия", "PORT KLANG": "Малайзия", "MALAYSIA": "Малайзия", "SINGAPORE": "Сингапур", "MANILA": "Филиппины", "PHILIPPINES": "Филиппины", "CHATTOGRAM": "Бангладеш", "CHITTAGONG": "Бангладеш", "BANGLADESH": "Бангладеш", "YANGON": "Мьянма", "MYANMAR": "Мьянма", "KARACHI": "Пакистан", "PAKISTAN": "Пакистан", "NHAVA SHEVA": "Индия", "MUNDRA": "Индия", "CALCUTTA": "Индия", "CHENNAI": "Индия", "INDIA": "Индия", "JEBEL ALI": "ОАЭ", "DUBAI": "ОАЭ", "UAE": "ОАЭ", "CHINA": "Китай", "CHANGSHU": "Китай", "HONG KONG": "Китай", "NINGBO": "Китай", "НИНБО": "Китай", "SHANGHAI": "Китай", "ШАНХАЙ": "Китай", "QINGDAO": "Китай", "ЦИНДАО": "Китай", "TIANJIN": "Китай", "ТЯНЬЦЗИНЬ": "Китай", "XINGANG": "Китай", "СИНЬГАН (ТЯНЬЦЗИНЬ)": "Китай", "DALIAN": "Китай", "ДАЛЯНЬ": "Китай", "XIAMEN": "Китай", "СЯМЭНЬ": "Китай", "SHENZHEN": "Китай", "ШЭНЬЧЖЭНЬ": "Китай", "YANTIAN": "Китай", "ЯНЬТЯНЬ": "Китай", "SHEKOU": "Китай", "ШЭКОУ": "Китай", "NANSHA": "Китай", "НАНЬША": "Китай", "GUANGZHOU": "Китай", "ГУАНЧЖОУ": "Китай", "HONGKONG": "Китай", "ГОНКОНГ": "Китай", "NANJING": "Китай", "НАНКИН": "Китай", "TAICANG": "Китай", "ТАЙЦАН": "Китай", "ПУСАН": "Южная Корея", "WUHAN": "Китай", "УХАНЬ": "Китай", "CHONGQING": "Китай", "ЧУНЦИН": "Китай", "SHANTOU": "Китай", "ШАНЬТОУ": "Китай", "FUZHOU": "Китай", "ФУЧЖОУ": "Китай", "LIANYUNGANG": "Китай", "ЛЯНЬЮНЬГАН": "Китай", "RIZHAO": "Китай", "ЖИЧЖАО": "Китай", "ZHANJIANG": "Китай", "ЧЖАНЬЦЗЯН": "Китай", "ИНЧХОН": "Южная Корея", "КВАНЯН": "Южная Корея", "ЯПОНИЯ (ВСЕ ПОРТЫ)": "Япония", "ЯПОНИЯ (ОСНОВНЫЕ ПОРТЫ)": "Япония", "ЯПОНИЯ (МЕСТНЫЕ ПОРТЫ)": "Япония", "ЙОКОГАМА": "Япония", "ТОКИО": "Япония", "КОБЕ": "Япония", "НАГОЯ": "Япония", "ОСАКА": "Япония", "ХАКАТА": "Япония", "МОНДЗИ": "Япония", "НИИГАТА": "Япония", "ОНАХАМА": "Япония", "ХАТИНОХЕ": "Япония", "СЕНДАЙ": "Япония", "СИМИДЗУ": "Япония", "ТОМАКОМАЙ": "Япония", "ЙОККАИТИ": "Япония", "АКИТА": "Япония", "ТИБА": "Япония", "ХИРОСИМА": "Япония", "ИЁМИСИМА": "Япония", "КАНАДЗАВА": "Япония", "МАЙДЗУРУ": "Япония", "МИДЗУСИМА": "Япония", "НАОЭЦУ": "Япония", "САКАИМИНАТО": "Япония", "ТАКАМАЦУ": "Япония", "ТОЁХАСИ": "Япония", "ТОЯМА-СИНКО": "Япония", "ЦУРУГА": "Япония", "ВАКАЯМА": "Япония", "ZHANGJIAGANG": "Китай", "ЧЖАНЦЗЯГАНЬ": "Китай", "HUANGPU": "Китай", "ХУАНПУ": "Китай", "YICHANG": "Китай", "ИЧАН": "Китай", "FOSHAN": "Китай", "ФОШАНЬ": "Китай", "QINZHOU": "Китай", "ЦИНЬЧЖОУ": "Китай", "FANGCHENG": "Китай", "ФАНЧЭН": "Китай", "TAIZHOU JIANGSU": "Китай", "ТАЙЧЖОУ (ЦЗЯНСУ)": "Китай", "CHANGSHA": "Китай", "ЧАНША": "Китай", "CHANGZHOU": "Китай", "ЧАНЧЖОУ": "Китай", "HEFEI": "Китай", "ХЭФЭЙ": "Китай", "JIUJIANG JIANGXI": "Китай", "ЦЗЮЦЗЯН": "Китай", "NANCHANG": "Китай", "НАНЬЧАН": "Китай", "NANTONG": "Китай", "НАНЬТУН": "Китай", "WUHU": "Китай", "УХУ": "Китай", "YANGZHOU": "Китай", "ЯНЧЖОУ": "Китай", "ZHENJIANG": "Китай", "ЧЖЭНЬЦЗЯН": "Китай", "SANSHUI": "Китай", "САНЬШУЙ": "Китай", "SHATIAN": "Китай", "ШАТЯНЬ": "Китай", "SANSHAN": "Китай", "САНЬШАНЬ": "Китай", "NANHAI": "Китай", "НАНЬХАЙ": "Китай", "SANRONG": "Китай", "САНЬЖУН": "Китай", "ZHAOQING": "Китай", "ЧЖАОЦИН": "Китай", "JIANGMEN": "Китай", "ЦЗЯНМЭНЬ": "Китай", "RONGQI": "Китай", "ЖУНЦИ": "Китай", "SHUNDE": "Китай", "ШУНЬДЭ": "Китай", "ZHONGSHAN": "Китай", "ЧЖУНШАНЬ": "Китай", "DONGGUAN": "Китай", "ДУНГУАНЬ": "Китай", "GAOSHA": "Китай", "ГАОША": "Китай", "HAIKOU": "Китай", "ХАЙКОУ": "Китай", "XIYU ZHUHAI": "Китай", "СИЮЙ (ЧЖУХАЙ)": "Китай", "WUZHOU": "Китай", "УЧЖОУ": "Китай", "GAOLAN": "Китай", "ГАОЛАНЬ": "Китай", "BEIJIAO": "Китай", "БЭЙЦЗЯО": "Китай", "GAOMING": "Китай", "ГАОМИН": "Китай", "XIAOLAN": "Китай", "СЯОЛАНЬ": "Китай", "YANGPU": "Китай", "ЯНПУ": "Китай", "ZHUHAI": "Китай", "ЧЖУХАЙ": "Китай", "YANTAI": "Китай", "ЯНЬТАЙ": "Китай", "PEARL RIVER DELTA": "Китай", "ДЕЛЬТА ЖЕМЧУЖНОЙ РЕКИ": "Китай", "NORTH CHINA IN-LAND": "Китай", "СЕВЕРНЫЙ КИТАЙ (ВНУТРЕННИЕ)": "Китай", "SOUTH CHINA IN-LAND": "Китай", "ЮЖНЫЙ КИТАЙ (ВНУТРЕННИЕ)": "Китай", "ХАЙФОН": "Вьетнам", "ХОШИМИН": "Вьетнам", "ДАНАНГ": "Вьетнам", "КИЛУНГ": "Тайвань", "ГАОСЮН": "Тайвань", "ТАЙЧЖУН": "Тайвань", "ЛАЕМЧАБАНГ": "Таиланд", "БАНГКОК": "Таиланд", "ДЖАКАРТА": "Индонезия", "СУРАБАЯ": "Индонезия", "СЕМАРАНГ": "Индонезия", "ПАЛЕМБАНГ": "Индонезия", "ПАДАНГ": "Индонезия", "МАКАСАР": "Индонезия", "ПАНДЖАНГ": "Индонезия", "БЕЛАВАН": "Индонезия", "ТАНДЖУНГ-ПЕЛЕПАС": "Малайзия", "ПЕНАНГ": "Малайзия", "ПАСИР-ГУДАНГ": "Малайзия", "ПОРТ-КЛАНГ": "Малайзия", "СИНГАПУР": "Сингапур", "МАНИЛА": "Филиппины", "ЧИТТАГОНГ": "Бангладеш", "ЯНГОН": "Мьянма", "КАРАЧИ": "Пакистан", "НАВА-ШЕВА": "Индия", "МУНДРА": "Индия", "КАЛЬКУТТА": "Индия", "ЧЕННАИ": "Индия", "ДЖЕБЕЛЬ-АЛИ": "ОАЭ", "ЮЖНАЯ КОРЕЯ": "Южная Корея", "ЯПОНИЯ": "Япония", "ВЬЕТНАМ": "Вьетнам", "ТАЙВАНЬ": "Тайвань", "ТАИЛАНД": "Таиланд", "ИНДОНЕЗИЯ": "Индонезия", "МАЛАЙЗИЯ": "Малайзия", "ФИЛИППИНЫ": "Филиппины", "БАНГЛАДЕШ": "Бангладеш", "МЬЯНМА": "Мьянма", "ПАКИСТАН": "Пакистан", "ИНДИЯ": "Индия", "ОАЭ": "ОАЭ", "КИТАЙ": "Китай"};
+function frCountry136(port){
+ const parts=String(port||'').split(' · ');
+ for(const part of parts){const k=part.trim().toUpperCase(); if(FR_COUNTRY136[k])return FR_COUNTRY136[k]; const base=k.replace(/\s*\([^)]*\)\s*$/,'').replace(/\s+VIA\s+.*$/,'').trim();if(FR_COUNTRY136[base])return FR_COUNTRY136[base];}
+ return 'Другие / не определено';
+}
+function frCountries136(rows){return [...new Set(rows.map(r=>frCountry136(r[1])))].sort((a,b)=>a==='Китай'?-1:b==='Китай'?1:a==='Другие / не определено'?1:b==='Другие / не определено'?-1:a.localeCompare(b,'ru'));}
+
 const FRC = { "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China", "GNLST": "GNLST", "DYS-VMS": "DYS-VMS", "SPECIAL (SKR/HAL)": "Special (SKR/HAL)", "CK LINE": "CK LINE" };
 async function loadFreight(draw) {
   if (FR || frLoading) return; frLoading = true;
@@ -1740,7 +1753,7 @@ const frEtdShow = (s, t0) => {
 const frDate = s => { const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s || ""); return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null; };
 const usd = v => "$ " + String(v).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 function freightBlock(draw) {
-  const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚢 Морской фрахт · Китай → Владивосток / Восточный"));
+  const d = h("div", { class: "blk" }, h("div", { class: "bt" }, "🚢 Морской фрахт · международные направления"));
   const msg = tx => { d.append(h("div", { style: "color:var(--muted);padding:8px 0;font-size:13px" }, tx)); return d; };
   if (!FR) { loadFreight(draw); return msg("Загружаю ставки…"); }
   if (FR.err && !FR.rows.length) {
@@ -1753,11 +1766,16 @@ function freightBlock(draw) {
   // r: 0 линия, 1 порт отпр., 2 порт назн., 3 дроп, 4 тип, 5 20GP, 6 40HQ, 7 рейс, 8 дней, 9 до, 10 условия, 11 примечание, 12 даты отхода
   const frC = r => (r[13] > -1 ? FR.dict[r[13]] : "") || "OUR LOGISTIC";
   const alive = FR.rows.filter(r => { const e = frDate(r[9]); return !e || e >= t0; });
-  const ctrs = [...new Set(alive.map(frC))].sort((a, b) => Object.keys(FRC).indexOf(a) - Object.keys(FRC).indexOf(b));
+  const countries = frCountries136(alive);
+  if (!countries.includes(calc.fcountry)) calc.fcountry = '';
+  d.append(h("div", {class:"ctl2"}, h("select", {class:"sel", title:"Страна отправления", style:"width:100%", onchange:e=>{calc.fcountry=e.target.value;calc.fpol="";calc.fctr="";calc.fpod="";calc.fcity="";draw();}}, h("option",{value:"",selected:!calc.fcountry},"Выберите страну отправления"), ...countries.map(c=>h("option",{value:c,selected:c===calc.fcountry},c)))));
+  if (!calc.fcountry) return msg(countries.length ? "Сначала выберите страну отправления." : "Нет действующих ставок.");
+  const countryRows = alive.filter(r=>frCountry136(r[1])===calc.fcountry);
+  const ctrs = [...new Set(countryRows.map(frC))].sort((a, b) => Object.keys(FRC).indexOf(a) - Object.keys(FRC).indexOf(b));
   if (calc.fctr && !ctrs.includes(calc.fctr)) calc.fctr = "";
-  const live = calc.fctr ? alive.filter(r => frC(r) === calc.fctr) : alive;
+  const live = calc.fctr ? countryRows.filter(r => frC(r) === calc.fctr) : countryRows;
   const cnt = {}; live.forEach(r => cnt[r[1]] = (cnt[r[1]] || 0) + 1);
-  const cntAll = {}; alive.forEach(r => cntAll[r[1]] = (cntAll[r[1]] || 0) + 1);
+  const cntAll = {}; countryRows.forEach(r => cntAll[r[1]] = (cntAll[r[1]] || 0) + 1);
   const portsAll = Object.keys(cntAll).sort((a, b) => cntAll[b] - cntAll[a] || a.localeCompare(b));
   const ports = Object.keys(cnt).sort((a, b) => cntAll[b] - cntAll[a] || a.localeCompare(b));
   if (!ports.length) return msg("Все предложения в файле уже закончились — загрузите новый прайс.");
@@ -1768,7 +1786,7 @@ function freightBlock(draw) {
   const ofPod = ofPol.filter(r => r[2] === calc.fpod);
   const cityCmp = (a, b) => { if (a === FR_PORT) return -1; if (b === FR_PORT) return 1; const ia = MAIN_CITIES.indexOf(a), ib = MAIN_CITIES.indexOf(b); return (ia < 0) - (ib < 0) || (ia >= 0 ? ia - ib : a.localeCompare(b, "ru")); };
   const cities = [...new Set(ofPod.map(r => r[3]))].sort(cityCmp);
-  const citiesAll = [...new Set(alive.filter(r => r[1] === calc.fpol && r[2] === calc.fpod).map(r => r[3]))].sort(cityCmp);
+  const citiesAll = [...new Set(countryRows.filter(r => r[1] === calc.fpol && r[2] === calc.fpod).map(r => r[3]))].sort(cityCmp);
   if (!cities.includes(calc.fcity)) calc.fcity = cities[0];
   // связка с ЖД: выбрали ДРОП до города и размер контейнера во фрахте — в блоке ЖД ставятся тот же город и тот же размер
   const sk = calc.fcity + "|" + calc.fsize;
