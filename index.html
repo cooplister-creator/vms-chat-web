@@ -240,6 +240,19 @@ h2.v{margin:10px 0 0;font-size:15px}
 .exp134-total{font-size:22px}
 @media(max-width:760px){.exp134-grid{grid-template-columns:minmax(0,1fr)}.exp134-col{display:contents}.exp134-grid .blk{min-width:0}.exp134-grid>.exp134-col:first-child>.blk:nth-child(3){order:4}.exp134-grid>.exp134-col:last-child>.blk:nth-child(1){order:3}.exp134-grid>.exp134-col:last-child>.blk:nth-child(2){order:5}.exp134-total{font-size:18px}}
 
+
+.calc141-switches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;width:100%}
+.calc141-switches label{justify-content:center;border:1px solid transparent;border-radius:8px;margin:0;white-space:nowrap;padding:8px 4px}
+.calc141-switches label.active{background:#ffffff35;border-color:#ffffff80}
+.calc141-grid{display:grid;gap:12px;align-items:start;grid-template-columns:repeat(2,minmax(0,1fr))}
+.calc141-grid>*{min-width:0;overflow-wrap:anywhere}
+.calc141-grid.n1{grid-template-columns:minmax(0,760px)}
+.calc141-grid.n3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.calc141-grid.n4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:1450px){.calc141-grid.n4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1150px){.calc141-grid.n3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:850px){.calc141-grid,.calc141-grid.n3,.calc141-grid.n4{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:420px){.calc141-switches{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 </head>
 <body>
@@ -597,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 140";
+const WEB_VERSION = "24.11.2026 · сборка 141";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1248,19 +1261,21 @@ function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
     w.innerHTML = "";
-    w.append(h("div", { class: "tb" }, h("b", {}, "Расчёт ставки · чистые ставки"),
-      h("label", {}, h("input", { type: "checkbox", checked: calc.rail, onchange: e => { calc.rail = e.target.checked; draw(); } }), "🚆 ЖД"),
-      h("label", {}, h("input", { type: "checkbox", checked: calc.freight, onchange: e => { calc.freight = e.target.checked; draw(); } }), "🚢 Фрахт"),
-      h("label", {}, h("input", { type: "checkbox", checked: calc.port, onchange: e => { calc.port = e.target.checked; draw(); } }), "⚓ Порт"), h("label", {}, h("input", {type:"checkbox",checked:calc.auto,onchange:e=>{calc.auto=e.target.checked;draw();}}),"🚛 Авто")));
-    if (!calc.rail && !calc.freight && !calc.port && !calc.auto) w.append(h("div", { style: "color:var(--muted)" }, "Отметьте ЖД, Фрахт и/или Порт"));
-    const nb = (calc.freight ? 1 : 0) + (calc.rail ? 1 : 0) + (calc.port ? 1 : 0) + (calc.auto ? 1 : 0);
+    const modules = [
+      ["freight", "🚢 Фрахт", freightBlock],
+      ["port", "⚓ Порт", portBlock],
+      ["rail", "🚆 ЖД", railBlock],
+      ["auto", "🚛 Авто", d => auto131Block(AUTO131_MAIN,d)]
+    ];
+    w.append(h("div", { class: "tb calc141-toolbar" }, h("b", {}, "Расчёт ставки · чистые ставки"),
+      h("div", {class:"calc141-switches"}, ...modules.map(([key,label]) => h("label", {class:calc[key]?"active":""}, h("input", {type:"checkbox",checked:calc[key],onchange:e=>{calc[key]=e.target.checked;draw();}}),label)))));
+    const enabled = modules.filter(([key])=>calc[key]);
+    const nb = enabled.length;
     w.style.maxWidth = nb >= 3 ? "1780px" : "";
-    if (nb) {   // все включённые блоки встают рядом: фрахт · ЖД · порт
-      const g = h("div", { class: "grid2" + (nb === 1 ? " one" : nb >= 3 ? " g3" : "") });
-      if (calc.freight) g.append(freightBlock(draw));
-      if (calc.rail) g.append(railBlock(draw));
-      if (calc.port) g.append(portBlock(draw));
-      if (calc.auto) g.append(auto131Block(AUTO131_MAIN,draw));
+    if (!nb) w.append(h("div", {style:"color:var(--muted)"}, "Отметьте Фрахт, Порт, ЖД и/или Авто"));
+    else {
+      const g = h("div", {class:"calc141-grid n"+nb});
+      for (const [, , build] of enabled) g.append(build(draw));
       w.append(g);
     }
   };
