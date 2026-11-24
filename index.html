@@ -597,7 +597,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 134";
+const WEB_VERSION = "24.11.2026 · сборка 135";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1063,6 +1063,16 @@ function buildExperiment119(m) {
     if(spnRoute119&&e.railSource!=='rail'){e.railSource='rail';e.portId='';e.portStation='';e.railCity='';e.destination='';e.railContractor='';e.railKey='';}
     const chosen=choices.find(o=>o.i===e.sea),seaUSD=chosen?Number(chosen.r[e.size?6:5]):null;
     sea.append(h('div',{class:'note'},chosen?'Море: $'+seaUSD+(usd119?' ≈ '+num119(seaUSD*usd119):' · курс USD недоступен'):'Морской фрахт пока не выбран'));
+    if(chosen){
+      const r=chosen.r, t0=new Date(); t0.setHours(0,0,0,0);
+      const raw=r[12]>-1&&FR.dict?FR.dict[r[12]]:'';
+      const etd=frEtdShow(raw,t0);
+      sea.append(h('div',{style:'margin:8px 0 4px;padding:8px 10px;border:1px solid var(--border, #d4e0ed);border-radius:8px;font-size:12px'},
+        h('div',{style:'font-weight:700;margin-bottom:4px'},'🚢 Даты отхода судов'),
+        h('div',{style:'font-weight:600'},etd||'Даты отхода не указаны в прайсе'),
+        r[14]?h('div',{style:'color:#d32f2f;margin-top:4px'},'Расписание отмечено как устаревшее'):null,
+        raw?h('details',{class:'exp134-help'},h('summary',{},'Расписание из прайса'),h('div',{style:'white-space:pre-wrap'},String(raw))):null));
+    }
     // Порт: отдельные терминальные услуги, без автоматического двойного начисления ПРР.
     const port=section119('⚓ 2. Порт','Выбор источника ЖД-тарифа. ПРР не добавляется автоматически.');left.append(port);
     if(spnRoute119){
