@@ -597,7 +597,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 139";
+const WEB_VERSION = "24.11.2026 · сборка 140";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1005,13 +1005,13 @@ function auto139Options(a){if(a.city==='Екатеринбург')return a.local
 function auto131Calc(a){
  const d=AUTO131_DATA[a.city],i=a.size?1:0,m=a.city==='Москва',ek=a.city==='Екатеринбург',sa=a.city==='Самара',nn=a.city==='Нижний Новгород',ir=a.city==='Иркутск';
  const valid=x=>x!==''&&x!=null&&Number.isFinite(Number(x))&&Number(x)>=0;
- const w=Number(a.weight),g=Number(a.gross),opts=auto139Options(a),r=opts?.find(x=>x[0]===a.dest);let credit=m?30000:ir?[10000,15000][i]:0,pickup=d?.[a.kind==='vtt'?'vtt':'gtd']?.[i]??null,pv=a.pv?(d?.pv?.[i]??null):0,heavy=0,km=0,terminal=0,ret=0,owner=0,extra=0,note='',ok=!!d;
+ const w=Number(a.weight),g=Number(a.gross),opts=auto139Options(a),r=opts?.find(x=>x[0]===a.dest);let credit=d?.[a.kind==='vtt'?'vtt':'gtd']?.[i]??null,pickup=m?30000:null,pv=a.pv?(d?.pv?.[i]??null):0,heavy=0,km=0,terminal=0,ret=0,owner=0,extra=0,note='',ok=!!d;
  if(m){km=valid(a.km)?Number(a.km)*150:null;heavy=valid(a.weight)?Math.max(0,w-(i?20:18))*2000:0;ok=ok&&valid(a.weight);}
- else if(ek){const E=AUTO139.ek,st=a.station||'',ct=i?40:g>24?'20 (28) тяж':'20 (24)',to=a.customs==='station'?'ТО на станции назначения':'ТО в порту';const tr=E.term.find(x=>x[0].trim()===to&&x[1]===st&&String(x[2])===String(ct)&&x[3]===(a.tk?'Да':'Нет'));terminal=tr?.[4]??null;pv=a.pv?((E.pv.find(x=>x[0]===st)?.[1]??NaN)+(i?3000:0)):0; if(a.local){pickup=E.city.find(x=>String(x[0]).trim()===a.dest&&x[1]===st&&String(x[2])===String(ct))?.[3]??null;heavy=Math.ceil(Math.max(0,g-24)/2)*1000;ret=E.depot.find(x=>x[0]===a.depot)?.[1]??null;}else{pickup=r?.[g>24?2:1]??null;}ok=valid(a.gross)&&g>0&&g<=30&&!!st;note=E.storage.find(x=>x[0]?.trim()===to&&x[1]===st&&String(x[2])===String(ct)&&x[3]===(a.tk?'Да':'Нет'))?.[4]||'Условия хранения уточнить';}
- else if(sa){const local=r&&AUTO139['Самара'].indexOf(r)<6;pickup=r?.[i||g>24||(!local&&w>21.5)?2:1]??null;owner=a.tk?(i?3500:3000):0;heavy=local?Math.max(0,g-24)*1000:i?Math.max(0,w-20)*1000:0;ret=Number(a.returnSa||0);ok=valid(a.gross)&&g>0&&(local||valid(a.weight)&&w>0&&(i?w<=25.5:w<=24));if(!local&&['Альметьевск','Чистополь','Нижнекамск','Елабуга','Набережные Челны','Казань','Бугульма'].includes(a.dest)&&w>23)ok=false;note='Дальние тяжёлые перевозки и разрешения согласовать. Хранение отдельно, без льготного периода.';}
- else if(nn){pickup=r?.[(a.tk?3:1)+(i||g>24?1:0)]??null;ok=valid(a.gross)&&g>0&&g<=30;note='Комплексная ставка; возврат порожнего иного собственника уточнить. Только нетаможенный груз.';}
+ else if(ek){const E=AUTO139.ek,st=a.station||'',ct=i?40:g>24?'20 (28) тяж':'20 (24)',to=a.customs==='station'?'ТО на станции назначения':'ТО в порту';const tr=E.term.find(x=>x[0].trim()===to&&x[1]===st&&String(x[2])===String(ct)&&x[3]===(a.tk?'Да':'Нет'));terminal=0; if(a.local){pickup=E.city.find(x=>String(x[0]).trim()===a.dest&&x[1]===st&&String(x[2])===String(ct))?.[3]??null;heavy=Math.ceil(Math.max(0,g-24)/2)*1000;ret=E.depot.find(x=>x[0]===a.depot)?.[1]??null;}else{pickup=r?.[g>24?2:1]??null;}ok=valid(a.gross)&&g>0&&g<=30&&!!st;note=E.storage.find(x=>x[0]?.trim()===to&&x[1]===st&&String(x[2])===String(ct)&&x[3]===(a.tk?'Да':'Нет'))?.[4]||'Условия хранения уточнить';}
+ else if(sa){const local=r&&AUTO139['Самара'].indexOf(r)<6;pickup=null;owner=0;heavy=local?Math.max(0,g-24)*1000:i?Math.max(0,w-20)*1000:0;ret=Number(a.returnSa||0);ok=valid(a.gross)&&g>0&&(local||valid(a.weight)&&w>0&&(i?w<=25.5:w<=24));if(!local&&['Альметьевск','Чистополь','Нижнекамск','Елабуга','Набережные Челны','Казань','Бугульма'].includes(a.dest)&&w>23)ok=false;pickup=valid(a.manual)?Number(a.manual):null;note='КП содержит комплексную ставку; отдельный автовывоз необходимо согласовать. Дальние тяжёлые перевозки и разрешения согласовать. Хранение отдельно, без льготного периода.';}
+ else if(nn){pickup=r?(a.dest==='По городу'?[12628,14520]:[16236,18150])[i||g>24?1:0]:null;ok=valid(a.gross)&&g>0&&g<=30;note='Автовывоз — отдельная строка КП без пересчёта; в исходном КП эта строка без НДС. Возврат порожнего иного собственника уточнить. Только нетаможенный груз.';}
  else if(ir){pickup=r?.[i||g>24?2:1]??null;ok=valid(a.gross)&&g>0;extra=(a.polar?5000:0)+(a.exped?(i?3000:2000):0);if(a.detach&&pickup!==null)pickup*=1.5;}
- else if(a.dest){km=valid(a.manual)?Number(a.manual):null;}
+ else {pickup=valid(a.manual)?Number(a.manual):null;}
  if(opts&&a.dest==='__other')pickup=valid(a.manual)?Number(a.manual):null;
  const vals=[credit,pickup,pv,heavy,km,terminal,ret,owner,extra];return {credit,pickup,pv,heavy,km,terminal,ret,owner,extra,note,total:ok&&vals.every(v=>v!==null&&Number.isFinite(v))?vals.reduce((x,y)=>x+y,0):null};
 }
@@ -1026,14 +1026,15 @@ function auto131Block(a,draw,locked=false){
  if(m||sa)inp('Вес груза, т','weight');if(ek||sa||nn||ir)inp('Вес брутто (контейнер + груз), т','gross');
  if(ek){const E=AUTO139.ek;sel('Станция / терминал',[['','Выберите терминал'],...[...new Set(E.term.map(x=>x[1]))].map(x=>[x,x])],'station');sel('Место таможенного оформления',[['port','В порту'],['station','На станции']],'customs');if(!a.customs)a.customs='port';check('Доставка по Екатеринбургу','local');if(a.local)sel('Депо сдачи порожнего',[['','Выберите депо'],...E.depot.map(x=>[x[0],x[0]])],'depot');}
  if(ek||sa||nn)check('Контейнер Трансконтейнера','tk');
- if(opts){sel('Место доставки',[['','Выберите направление'],...opts.map(x=>[x[0],x[0]]),['__other','Другой город / по запросу']],'dest');if(a.dest==='__other')inp('Согласованная ставка доставки, ₽','manual');}
- else {sel('Конечный город доставки',[['',a.city||'По городу'],...Object.keys(d?.dest||{}).map(x=>[x,x]),['__other','Другой город']],'dest',()=>{a.km=a.dest==='__other'?'':String(d?.dest[a.dest]??0);a.manual='';});if(m)inp('Расстояние, км','km');else if(a.dest)inp('Доплата за межгород по запросу, ₽','manual');sel('Тип оформления',[['gtd','ГТД'],['vtt','ВТТ']],'kind');}
+ if(opts){sel('Место доставки',[['','Выберите направление'],...opts.map(x=>[x[0],x[0]]),['__other','Другой город / по запросу']],'dest');if(sa||a.dest==='__other')inp('Согласованная ставка автовывоза, ₽','manual');}
+ else {sel('Конечный город доставки',[['',a.city||'По городу'],...Object.keys(d?.dest||{}).map(x=>[x,x]),['__other','Другой город']],'dest',()=>{a.km=a.dest==='__other'?'':String(d?.dest[a.dest]??0);a.manual='';});if(m)inp('Расстояние, км','km');else inp('Согласованная ставка автовывоза, ₽','manual');}
+ sel('Тип оформления',[['gtd','ГТД'],['vtt','ВТТ']],'kind');
  if(a.dest==='__other')b.append(ctrl('Название города',h('input',{class:'field',value:a.other||'',onchange:e=>{a.other=e.target.value;}})));
  if(sa)sel('Возврат порожнего',[['0','Включён (терминалы по прайсу)'],['23600','Тольятти +23 600'],['7000','Трубная +7 000'],['5000','Магистральная / Клиническая +5 000']],'returnSa');
  if(ir){check('Терминал Полярная +5 000','polar');check('Экспедирование','exped');check('Отцеп прицепа ×1,5','detach');}
- if(ek||d?.pv?.[i]!=null)check('Раскрепление из полувагона','pv');
- const c=auto131Calc(a);b.append(h('div',{class:'note'},ek||sa||nn?'С НДС 22% · суммы исходного прайса без пересчёта'+(sa?' (прайс 01.01.2025)':nn?' (прайс 01.01.2024)':''):'Без НДС · суммы без пересчёта'));
- for(const [label,v] of [['Раскредитация',c.credit],['Автовывоз',c.pickup],['Терминальные работы',c.terminal],['Возврат порожнего',c.ret],['Доплата ТК',c.owner],[m?'Межгород · 150 ₽/км':'Межгород по запросу',c.km],['Перевес',c.heavy],['Раскрепление',c.pv],['Дополнительные услуги',c.extra],['Итого авто',c.total]])if(v!==0||label==='Итого авто')b.append(h('div',{class:'line',style:'display:flex;justify-content:space-between;gap:8px'},h('span',{},label),h('b',{},v===null||!Number.isFinite(v)?'Уточнить':money(Math.round(v*100)/100))));
+ if(d?.pv?.[i]!=null)check('Раскрепление из полувагона','pv');
+ const c=auto131Calc(a);b.append(h('div',{class:'note'},ek||sa?'С НДС 22% · суммы исходного прайса без пересчёта'+(sa?' (прайс 01.01.2025)':nn?' (прайс 01.01.2024)':''):'Без НДС · суммы без пересчёта'));
+ for(const [label,v] of [['Раскредитация',c.credit],['Автовывоз',c.pickup],['Терминальные работы',c.terminal],['Возврат порожнего',c.ret],['Доплата ТК',c.owner],[m?'Межгород · 150 ₽/км':'Межгород по запросу',c.km],['Перевес',c.heavy],['Раскрепление',c.pv],['Дополнительные услуги',c.extra],['Итого авто',c.total]])if(v!==0||['Итого авто','Раскредитация','Автовывоз'].includes(label))b.append(h('div',{class:'line',style:'display:flex;justify-content:space-between;gap:8px'},h('span',{},label),h('b',{},v===null||!Number.isFinite(v)?'Уточнить':money(Math.round(v*100)/100))));
  if(c.note)b.append(h('details',{},h('summary',{},'Условия тарифа'),h('div',{class:'note'},c.note)));return b;
 }
 
