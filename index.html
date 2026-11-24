@@ -597,7 +597,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 136";
+const WEB_VERSION = "24.11.2026 · сборка 137";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1061,7 +1061,13 @@ function buildExperiment119(m) {
     const choices=live.filter(o=>o.r[1]===e.pol&&o.r[2]===e.pod);
     if(!choices.some(o=>o.i===e.sea))e.sea=-1;
     const frName=r=>(r[13]>-1&&FR.dict?FR.dict[r[13]]:'')||r[0]||'Перевозчик';
-    sea.append(choose119(choices.map(o=>({v:o.i,t:frName(o.r)+' · '+o.r[4]+' · $'+o.r[e.size?6:5]+' · до '+(o.r[9]||'не указано')})),e.sea<0?'':e.sea,v=>{e.sea=v===''?-1:Number(v);redraw();},'Выберите морское предложение'));
+    const etdToday137=new Date(); etdToday137.setHours(0,0,0,0);
+    const etdLabel137=r=>{
+      const raw=r[12]>-1&&FR.dict?FR.dict[r[12]]:'';
+      const etd=frEtdShow(raw,etdToday137);
+      return ' · 🚢 '+(etd?(/^(отход:|отходы прошли:)/i.test(etd)?etd:'Отход: '+etd):'Отход не указан')+(r[14]?' (устарело)':'');
+    };
+    sea.append(choose119(choices.map(o=>({v:o.i,t:frName(o.r)+' · '+o.r[4]+' · $'+o.r[e.size?6:5]+etdLabel137(o.r)+' · до '+(o.r[9]||'не указано')})),e.sea<0?'':e.sea,v=>{e.sea=v===''?-1:Number(v);redraw();},'Выберите морское предложение'));
     // Находка и Восточный: только СПН. Не смешивать с ЖД-ставками Владивостока.
     const spnRoute119=/находк|восточн/i.test(String(e.pod||''));
     if(spnRoute119&&e.railSource!=='rail'){e.railSource='rail';e.portId='';e.portStation='';e.railCity='';e.destination='';e.railContractor='';e.railKey='';}
