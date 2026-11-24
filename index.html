@@ -575,7 +575,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "24.11.2026 · сборка 131";
+const WEB_VERSION = "24.11.2026 · сборка 132";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -969,9 +969,9 @@ function auto131Calc(a){
  const d=AUTO131_DATA[a.city], m=a.city==='Москва', i=a.size?1:0;
  const valid=x=>x!==''&&x!=null&&Number.isFinite(Number(x))&&Number(x)>=0;
  const tariff=d?.[a.kind==='vtt'?'vtt':'gtd']?.[i]??null;
- const credit=m?30000:tariff;
- const pickup=m?tariff:(valid(a.pickup)?Number(a.pickup):null);
- const pv=a.pv?(d?.pv[i]??null):0;
+ const credit=m?30000:0;
+ const pickup=tariff;
+ const pv=a.pv?(d?.pv?.[i]??0):0;
  const heavy=m&&valid(a.weight)?Math.max(0,Number(a.weight)-(i?20:18))*2000:0;
  const km=valid(a.km)?Number(a.km)*150:null;
  const ok=!!d&&credit!==null&&pickup!==null&&pv!==null&&km!==null&&(!m||valid(a.weight));
@@ -989,9 +989,8 @@ function auto131Block(a,draw,locked=false){
  if(a.dest==='__other')b.append(ctrl('Название города',h('input',{class:'field',value:a.other||'',onchange:e=>{a.other=e.target.value;}})));
  b.append(ctrl('Расстояние, км (можно изменить)',inp('km')));
  b.append(ctrl('Тип оформления',sel([['gtd','ГТД'],['vtt','ВТТ']],a.kind||'gtd',v=>{a.kind=v;})));
- if(!m){b.append(ctrl('Автовывоз со станции, ₽',inp('pickup')),h('div',{class:'note'},'Раскредитация подставляется из Excel. Отдельную ставку автовывоза укажите по прайсу подрядчика; перевес вне Москвы — по подтверждённому тарифу.'));}
 
- b.append(h('label',{},h('input',{type:'checkbox',checked:a.pv,onchange:e=>{a.pv=e.target.checked;draw();}}),' Раскрепление из полувагона'));
+ if(d?.pv?.[i]!=null)b.append(h('label',{},h('input',{type:'checkbox',checked:a.pv,onchange:e=>{a.pv=e.target.checked;draw();}}),' Раскрепление из полувагона'));
  const c=auto131Calc(a); for(const [label,v] of [['Раскредитация',c.credit],['Автовывоз',c.pickup],['Межгород · 150 ₽/км',c.km],['Перевес',c.heavy],['Раскрепление',c.pv],['Итого авто',c.total]])b.append(h('div',{class:'line',style:'display:flex;justify-content:space-between;gap:8px'},h('span',{},label),h('b',{},v===null?'Уточнить':money(Math.round(v*100)/100))));
  return b;
 }
