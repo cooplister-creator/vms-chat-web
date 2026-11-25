@@ -449,6 +449,7 @@ function showNotAllowed(u) {
 }
 auth.onAuthStateChanged(u => {
   unsubs.forEach(f => f()); unsubs = [];
+  if (!u || (me && me.uid!==u.uid)) auto165ResetRegional();
   if (!u) { me = null; showAuth(); return; }
   enter(u);
 });
@@ -481,8 +482,14 @@ async function enter(u) {
 function startApp() {
   buildShell();
   unsubs.push(db.collection("users").onSnapshot(s => {
+    const prevSelf=USERS[me.uid];
     USERS = {}; s.forEach(d => USERS[d.id] = { uid: d.id, ...d.data() });
-    renderChatList(); if (tab !== "chats") renderTab(); refreshHead();
+    const nextSelf=USERS[me.uid];
+    const rightsChanged=!!prevSelf&&!!nextSelf&&(prevSelf.admin!==nextSelf.admin||prevSelf.owner!==nextSelf.owner);
+    renderChatList();
+    // 165: presence/lastSeen updates must not rebuild a calculator or erase a field being edited.
+    if (tab !== "chats" && (tab !== "calc" && tab !== "experiment" || rightsChanged)) renderTab();
+    refreshHead();
   }));
   unsubs.push(db.collection("rooms").where("members", "array-contains", me.uid).onSnapshot(s => {
     ROOMS = s.docs.map(d => { const x = d.data(); return { id: d.id, type: x.type || "group", name: x.name || "", members: x.members || [],
@@ -637,7 +644,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 164";
+const WEB_VERSION = "25.11.2026 · сборка 165";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1124,8 +1131,48 @@ function auto163City(c){return auto163Ready()?AUTO163_DATA[c]:null;}
 function auto163Base(c){const a=AUTO131_DATA[c],b=auto163City(c);return a&&b?{...a,...b.base}:null;}
 function auto163Ek(){return {...AUTO139.ek,...auto163City('Екатеринбург')?.tables};}
 function auto163Return(a,p){return ({'23600':p.returnToly,'7000':p.returnTrub,'5000':p.returnMag,'0':0})[String(a.returnSa||'0')]??null;}
-function auto163RefreshOnEntry(){if(!AUTO163_PENDING){AUTO163_DATA=null;AUTO163_ERROR='';}}
-async function auto163Load(force=false){const uid=me?.uid;if(!uid)throw Error('Войдите в систему');if(AUTO163_UID!==uid){AUTO163_UID=uid;AUTO163_DATA=null;AUTO163_PENDING=null;AUTO163_ERROR='';}if(AUTO163_PENDING)return AUTO163_PENDING;if(!force&&auto163Ready())return AUTO163_DATA;AUTO163_ERROR='';if(force)AUTO163_DATA=null;const p=history157Post('auto161_regional_list',{},45000).then(j=>{if(!j.data||Object.keys(AUTO131_DATA).some(c=>!j.data[c]))throw Error('Сервер не вернул все региональные тарифы. Обновите Auto.gs и развёртывание GAS.');if(AUTO163_UID===uid&&me?.uid===uid){AUTO163_DATA=j.data;AUTO163_ID=j.id||'';AUTO163_TS=j.ts||'';AUTO163_ERROR='';}return j.data;}).catch(e=>{if(AUTO163_UID===uid){AUTO163_DATA=null;AUTO163_ERROR=e.message;}throw e;}).finally(()=>{if(AUTO163_PENDING===p)AUTO163_PENDING=null;});AUTO163_PENDING=p;return p;}
+// 165: keep the last confirmed regional tariff snapshot; only a successful request replaces it.
+let AUTO165_ATTEMPT=0;
+const auto165Subscriptions=new WeakMap(),calc165Views=new WeakMap(),calc165Deferred=new WeakMap();
+function auto165ResetRegional(){AUTO163_DATA=null;AUTO163_UID='';AUTO163_ID='';AUTO163_TS='';AUTO163_ERROR='';AUTO163_PENDING=null;AUTO165_ATTEMPT=0;}
+function auto163RefreshOnEntry(){if(!auto163Ready()&&!AUTO163_PENDING)AUTO163_ERROR='';}
+function calc165AsyncDraw(draw){
+ const w=calc165Views.get(draw);if(!w){draw();return;}if(!w.isConnected)return;
+ const field=document.activeElement;
+ if(field&&w.contains(field)&&field.matches('input:not([type=checkbox]):not([type=radio]):not([type=button]),textarea,select')){
+  if(calc165Deferred.get(draw)===field)return;
+  calc165Deferred.set(draw,field);
+  field.addEventListener('blur',()=>setTimeout(()=>{if(calc165Deferred.get(draw)!==field)return;calc165Deferred.delete(draw);if(w.isConnected)calc165AsyncDraw(draw);},0),{once:true});
+  return;
+ }
+ calc165Deferred.delete(draw);draw();
+}
+function auto165Watch(draw,p,shouldDraw=()=>true){
+ let watched=auto165Subscriptions.get(draw);if(!watched){watched=new Map();auto165Subscriptions.set(draw,watched);}
+ if(watched.has(p)){watched.get(p).push(shouldDraw);return p;}
+ const checks=[shouldDraw];watched.set(p,checks);const uid=me?.uid;
+ const done=()=>{watched.delete(p);if(me?.uid===uid&&checks.some(f=>f()))calc165AsyncDraw(draw);};
+ p.then(done,done);return p;
+}
+function auto165RefreshCached(draw,force=false){
+ if(!force&&!AUTO163_PENDING&&Date.now()-AUTO165_ATTEMPT<60000)return;
+ const data=AUTO163_DATA,id=AUTO163_ID,ts=AUTO163_TS,err=AUTO163_ERROR;
+ auto165Watch(draw,AUTO163_PENDING||auto163Load(true),()=>force||data!==AUTO163_DATA||id!==AUTO163_ID||ts!==AUTO163_TS||err!==AUTO163_ERROR);
+}
+function auto163Load(force=false){
+ const uid=me?.uid;if(!uid)return Promise.reject(Error('Войдите в систему'));
+ if(AUTO163_UID!==uid){auto165ResetRegional();AUTO163_UID=uid;}
+ if(AUTO163_PENDING)return AUTO163_PENDING;if(!force&&auto163Ready())return Promise.resolve(AUTO163_DATA);
+ AUTO165_ATTEMPT=Date.now();
+ const p=history157Post('auto161_regional_list',{},45000).then(j=>{
+  if(!j.data||Object.keys(AUTO131_DATA).some(c=>!j.data[c]))throw Error('Сервер не вернул все региональные тарифы. Обновите Auto.gs и развёртывание GAS.');
+  if(AUTO163_PENDING===p&&AUTO163_UID===uid&&me?.uid===uid){
+   if(!AUTO163_DATA||JSON.stringify(AUTO163_DATA)!==JSON.stringify(j.data))AUTO163_DATA=j.data;
+   AUTO163_ID=j.id||'';AUTO163_TS=j.ts||'';AUTO163_ERROR='';
+  }return j.data;
+ }).catch(e=>{if(AUTO163_PENDING===p&&AUTO163_UID===uid&&me?.uid===uid)AUTO163_ERROR=e.message||'Не удалось обновить ставки';throw e;}).finally(()=>{if(AUTO163_PENDING===p)AUTO163_PENDING=null;});
+ AUTO163_PENDING=p;return p;
+}
 function openAuto163(hint=''){
  if(!isAdmin){toast('Управление автотарифами доступно администраторам');return;}
  const host=h('div',{}),close=modal162Wide(host,1000),city=h('select',{class:'sel'},...Object.keys(AUTO131_DATA).map(c=>h('option',{value:c},c))),body=h('div',{}),status=h('div',{class:'note'}),search=h('input',{class:'field',placeholder:'Фильтр по направлению или услуге'}),actions=h('div',{style:'display:flex;gap:8px;flex-wrap:wrap'}),preview=h('div',{});
@@ -1164,16 +1211,21 @@ function auto131Calc(a){
 }
 function auto131Block(a,draw,locked=false){
  const b=h('div',{class:'blk',style:'padding:12px;min-width:0'},h('div',{class:'bt'},'🚛 Авто · доставка со станции'));
- if(!auto163Ready()){b.append(h('div',{class:'note'},AUTO163_ERROR||'Загрузка актуальных региональных тарифов…'),h('button',{class:'btn ghost',onclick:()=>auto163Load(true).then(draw).catch(()=>draw())},'Повторить'));if(AUTO163_UID!==me?.uid||!AUTO163_ERROR)auto163Load().then(draw).catch(()=>draw());return b;}
- const d=auto163Base(a.city),i=a.size?1:0,m=a.city==='Москва',ek=a.city==='Екатеринбург',sa=a.city==='Самара',nn=a.city==='Нижний Новгород',ir=a.city==='Иркутск',opts=auto139Options(a);const P=auto163City(a.city)?.params||{}; b.append(h('div',{class:'note'},'Региональные ставки с сервера · '+(AUTO163_ID?'редакция '+AUTO163_TS.slice(0,10):'исходная редакция 162'),h('button',{class:'btn ghost',style:'margin-left:8px',onclick:()=>auto163Load(true).then(draw).catch(()=>draw())},'Обновить ставки')));
+ if(!auto163Ready()){
+  b.append(h('div',{class:'note'},AUTO163_ERROR||'Загрузка актуальных региональных тарифов…'),h('button',{class:'btn ghost',onclick:()=>auto165Watch(draw,AUTO163_PENDING||auto163Load(true))},'Повторить'));
+  if(AUTO163_UID!==me?.uid||!AUTO163_ERROR)auto165Watch(draw,AUTO163_PENDING||auto163Load());return b;
+ }
+ const d=auto163Base(a.city),i=a.size?1:0,m=a.city==='Москва',ek=a.city==='Екатеринбург',sa=a.city==='Самара',nn=a.city==='Нижний Новгород',ir=a.city==='Иркутск',opts=auto139Options(a);const P=auto163City(a.city)?.params||{}; b.append(h('div',{class:'note'},'Региональные ставки с сервера · '+(AUTO163_ID?'редакция '+AUTO163_TS.slice(0,10):'исходная редакция 162'),h('button',{class:'btn ghost',style:'margin-left:8px',onclick:e=>{e.currentTarget.textContent='Обновление…';auto165RefreshCached(draw,true);}},'Обновить ставки')));
+ if(AUTO163_ERROR)b.append(h('div',{class:'note',style:'color:#b45309'},'Не удалось обновить тарифы. Используются последние успешно загруженные ставки. Перед оформлением проверьте актуальность. '+AUTO163_ERROR));
+ auto165RefreshCached(draw);
  const sel=(label,items,key,reset)=>b.append(ctrl(label,h('select',{class:'sel',onchange:e=>{a[key]=e.target.value;reset?.();draw();}},...items.map(([v,t])=>h('option',{value:v,selected:String(v)===String(a[key]??'')},t)))));
  const inp=(label,key)=>b.append(ctrl(label,h('input',{class:'field',type:'number',min:0,step:'any',value:a[key]??'',onchange:e=>{a[key]=e.target.value;draw();}})));
  const check=(label,key)=>b.append(h('label',{},h('input',{type:'checkbox',checked:!!a[key],onchange:e=>{a[key]=e.target.checked;if(key==='local'){a.dest='';a.manual='';a.depot='';}draw();}}),' '+label));
  sel('Город прибытия ЖД',[['','Выберите город'],...Object.keys(AUTO131_DATA).map(x=>[x,x])],'city',()=>{Object.assign(a,{dest:'',km:'0',manual:'',pv:false,tk:false,station:'',depot:'',local:false,customs:'port',returnSa:'0',polar:false,exped:false,detach:false,other:'',gross:'',weight:'',offer161:'',dest161:''});});
  if(locked)b.append(ctrl('Контейнер',h('div',{},i?'40HC':'20DC')));else b.append(ctrl('Контейнер',h('select',{class:'sel',onchange:e=>{a.size=Number(e.target.value);draw();}},h('option',{value:0,selected:!i},'20DC'),h('option',{value:1,selected:!!i},'40HC'))));
- if(AUTO161_USER!==me?.uid||(!AUTO161_CACHE&&!AUTO161_ERROR&&!AUTO161_PENDING))auto161Load().then(draw).catch(()=>draw());
+ if(a.mode161==='kp'&&(AUTO161_USER!==me?.uid||(!AUTO161_CACHE&&!AUTO161_ERROR)))auto165Watch(draw,AUTO161_PENDING&&AUTO161_USER===me?.uid?AUTO161_PENDING:auto161Load());
  b.append(ctrl('Источник автовывоза',h('select',{class:'sel',onchange:e=>{a.mode161=e.target.value;a.offer161='';a.dest161='';draw();}},h('option',{value:'base',selected:a.mode161!=='kp'},'Региональный калькулятор'),h('option',{value:'kp',selected:a.mode161==='kp'},'Загруженные КП'))));
- if(AUTO161_USER===me?.uid&&AUTO161_ERROR)b.append(h('div',{class:'note'},'КП: '+AUTO161_ERROR,h('button',{class:'btn ghost',onclick:()=>auto161Load(true).then(draw).catch(()=>draw())},'Повторить')));
+ if(AUTO161_USER===me?.uid&&AUTO161_ERROR)b.append(h('div',{class:'note'},'КП: '+AUTO161_ERROR,h('button',{class:'btn ghost',onclick:()=>auto165Watch(draw,auto161Load(true))},'Повторить')));
  if(a.mode161==='kp')return auto161Block(a,draw,b);
  if(m||sa)inp('Вес груза, т','weight');
  if(sa){const w=Number(a.weight),tare=i?4:2.2;const g=a.weight!==''&&a.weight!=null&&Number.isFinite(w)&&w>=0?Math.round((w+tare)*1000)/1000:'';b.append(ctrl('Вес брутто, т (автоматически)',h('input',{class:'field',type:'number',value:g,readonly:true,title:'Вес груза + тара '+tare+' т'})));b.append(h('div',{class:'note'},'Вес контейнера: '+String(tare).replace('.',',')+' т'));}
@@ -1202,7 +1254,7 @@ function buildExperiment119(m) {
   const num119=n=>Number.isFinite(n)?money(Math.round(n)):'—';
   function section119(title,help){return h('div',{class:'blk',style:'padding:16px;min-width:0'},h('div',{class:'bt'},title),h('details',{class:'exp134-help'},h('summary',{},'Подробнее'),h('div',{class:'note'},help)));}
   function choose119(options,value,change,placeholder){return h('select',{class:'sel',style:'width:100%;margin:5px 0 9px',onchange:x=>change(x.target.value)},h('option',{value:'',selected:!value},placeholder||'Выберите…'),...options.map(o=>h('option',{value:String(o.v),selected:String(o.v)===String(value)},o.t)));}
-  function redraw(){w.innerHTML='';
+  function redraw(){if(!w.isConnected)return;calc165Deferred.delete(redraw);w.innerHTML='';
     w.append(h('div',{class:'tb'},h('b',{},'🧪 Экспериментальные инструменты · конструктор маршрута'),h('button',{class:'btn ghost',style:'font-size:12px',onclick:()=>{e.showAlerts=!e.showAlerts;redraw();}},e.showAlerts?'← К конструктору':'🚨 Срочные уведомления')));
     if(e.showAlerts){const holder=h('div',{});w.append(holder);buildAlerts(holder);return;}
     w.append(h('details',{class:'exp134-help'},h('summary',{},'Условия предварительного расчёта'),h('div',{class:'note'},'Тестовый режим: тарифы используются только для чтения. Основной калькулятор и база не меняются. Все суммы требуют проверки условий и даты действия.')));
@@ -1291,7 +1343,7 @@ function buildExperiment119(m) {
     rail.append(choose119([{v:0,t:"20′ до 24 т"},{v:1,t:"20′ 24–28 т"},{v:3,t:"40′ до 28 т"}],e.size,v=>{e.size=Number(v);e.sea=-1;e.railKey='';redraw();}));
     let railPrice=null,railLabel='',railNote='',railSelected=null,railGuard=0,railExtras=0,railVat=0;
     if(e.railSource==='rail'&&!(spnRoute119&&e.eastMode==='direct')){
-      if(!ratesLoaded)loadRates(redraw);
+      if(!ratesLoaded||rates165Loading)loadRates(redraw);
       // Режим ПВ определяется по явной отметке в тарифе, а не по названию подрядчика.
       // Без такой отметки тариф остаётся в обычной категории ФТГ (требует проверки условий).
       const pv119=r=>/полувагон|полувагонах|\bПВ\b|\(ПВ\)/i.test([r.station,r.mode,r.transport,r.notes,r.condition].filter(Boolean).join(' '));
@@ -1398,7 +1450,7 @@ function buildExperiment119(m) {
     if(canSea&&canRail&&autoTotal!==null){const total=autoTotal+seaUSD*usd119+railPrice+railGuard+railExtras+e.extra+portPrice124+portExtra161;summary.append(h('h2',{class:'exp134-total',style:'margin:8px 0 4px'},'Предварительный итог: '+num119(total)),h('div',{class:'note'},'Сумма ориентировочная: курс ЦБ, НДС в тарифах может различаться. ПРР ВСК включается только вручную после проверки, охрана и доплаты учитываются только по выбранным галочкам; проверьте включённые услуги. Проверьте совместимость условий море/ЖД и тип контейнера.'));summary.append(quote161Buttons({date:new Date().toLocaleString('ru-RU'),route:[e.pol,e.pod,e.railCity||e.portStation,e.auto131On?(e.auto131.mode161==='kp'?e.auto131.dest161:e.auto131.dest):''].filter(Boolean).join(' → ')+' · '+(e.size===3?'40HC':'20DC'),lines:quoteLines161,total:num119(total),note:'Предварительно, без гарантии наличия мест. Проверьте НДС, сроки, охрану, ПРР, включённые услуги и совместимость перевозок. Неучтённые расходы согласуются отдельно.'}));}
     else summary.append(h('div',{class:'note',style:'margin-top:10px'},'Для итоговой суммы выберите морское предложение, ЖД-ставку и дождитесь загрузки курса USD.'));
   }
-  redraw();
+  calc165Views.set(redraw,w);redraw();
 }
 
 /* ---------- расчёт ставки ---------- */
@@ -1406,7 +1458,7 @@ let calc = { auto: false, orig: 0, rg: false, pfut: false, tprr: "", pdest: 0, p
 function buildCalc(m) {
   const page = h("div", { class: "page" }), w = h("div", { class: "wrap" }); page.append(w); m.append(page);
   const draw = () => {
-    w.innerHTML = "";
+    if(!w.isConnected)return;calc165Deferred.delete(draw);w.innerHTML = "";
     const modules = [
       ["freight", "🚢 Фрахт", freightBlock],
       ["port", "⚓ Порт", portBlock],
@@ -1425,7 +1477,7 @@ function buildCalc(m) {
       w.append(g);
     }
   };
-  draw();
+  calc165Views.set(draw,w);draw();
 }
 function seg(names, cur, on) { return h("div", { class: "seg" }, ...names.map((n, i) => h("button", { class: cur === i ? "on" : "", onclick: () => on(i) }, n))); }
 function ctrl(label, el) { return h("div", {}, h("label", {}, label), el); }
@@ -1449,7 +1501,9 @@ function card(i, price, l1, l2, l3, future, file) {
     file ? h("button", { title: "Открыть файл со ставкой", style: "margin-left:auto;flex:none;align-self:center;border:0;background:transparent;border-radius:8px;font-size:13px;line-height:1;padding:3px 4px;opacity:.7;cursor:pointer", onclick: e => { e.stopPropagation(); openRateFile(file); } }, "📄") : null);
 }
 const per = r => /^\d/.test(r.to) ? r.from.slice(0, 5) + "–" + r.to : "с " + r.from;
-let ratesLoaded = false, RAILNOTES = [];
+let ratesLoaded = false, RAILNOTES = [], rates165Loading=false;
+const rates165Waiters=new Set(),port165Waiters=new Set(),freight165Waiters=new Set();
+function calc165Flush(waiters){const callbacks=[...waiters];waiters.clear();for(const cb of callbacks)calc165AsyncDraw(cb);}
 async function railNotePost(action, extra) {
   const tk = await me.getIdToken();
   const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ action, token: tk }, extra)) });
@@ -1466,11 +1520,12 @@ function railNoteEls(draw) {
       try { await railNotePost("rail_note_del", { id: n.id }); draw(); } catch (e) { toast(e.message || "Не получилось удалить"); } } }, "✕") : null));
 }
 async function loadRates(draw) {
-  ratesLoaded = true;
+  rates165Waiters.add(draw);if(rates165Loading)return;rates165Loading=true;ratesLoaded = true;
   try {
     const j = await docsCall("action=rates");
-    RAILNOTES = Array.isArray(j.notes) ? j.notes : []; if (Array.isArray(j.rates)) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; draw(); }
+    RAILNOTES = Array.isArray(j.notes) ? j.notes : []; if (Array.isArray(j.rates)) { RATES = j.rates; if (j.updated) TARIFF_UPDATED = j.updated; }
   } catch (e) { console.warn("rates", e); }
+  finally{rates165Loading=false;calc165Flush(rates165Waiters);}
 }
 let SHOWARCH = false; const SEL = new Set();
 const rkey = r => [r.contractor, r.station, r.type, r.vat, r.from, r.to, r.price].join("|");
@@ -1495,7 +1550,7 @@ const rgNum = r => r.price + (calc.rg && r.guard ? r.guard : 0) + radd(r);
 const rgPrice = r => money(rgNum(r));
 const rgSt = r => r.station + (rateSpn(r) ? (vskPrr() ? " · ставка " + money(r.price) + " + ПРР ВСК " + money(vskPrr().p) : " · ПРР ВСК: нет данных") : "") + (calc.rg ? (r.guard ? " · +охрана " + money(r.guard) + (r.gvat ? " (НДС " + r.gvat + "%)" : "") : " · охрана не указана") : "");
 function railBlock(draw) {
-  if (!ratesLoaded) loadRates(draw);
+  if (!ratesLoaded||rates165Loading) loadRates(draw);
   if (calc.orig === 1 && !PORT) loadPort(draw);
   const isSpn = r => /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor);
   const AR = activeRates().filter(r => (!r.arch || (isAdmin && SHOWARCH)) && (calc.orig === 1) === isSpn(r)); const cities = [...new Set(AR.map(r => r.city))].sort((a, b) => a.localeCompare(b, "ru"));
@@ -1582,9 +1637,9 @@ function railBlock(draw) {
 /* ---------- порты: ЖД от порта + ПРР и услуги терминала ---------- */
 let PORT = null, portLoading = false, WIPE_ASK = 0, WIPE2 = null;
 async function loadPort(draw) {
-  if (PORT || portLoading) return; portLoading = true;
+  if(PORT)return;port165Waiters.add(draw);if(portLoading)return;portLoading=true;
   try { PORT = await docsCall("action=port"); } catch (e) { PORT = { err: e.message || "ошибка", ports: [] }; }
-  portLoading = false; draw();
+  portLoading = false; calc165Flush(port165Waiters);
 }
 const PSZ = ["20' до 24 т", "20' 24–28 т", "20' свыше 28 т", "40' до 28 т", "40' свыше 28 т"];
 const PEX = new Set();
@@ -1644,7 +1699,7 @@ function portNext(row) {   // → { now: действующие ставки, la
 /* ---------- порт → сторонний терминал: ПРР + авто + ЖД от терминала ---------- */
 const AUTO_T = { base: 20000, limit: 20, add: 10000 };
 function portTermView(d, pd, draw) {
-  if (!ratesLoaded) loadRates(draw);
+  if (!ratesLoaded||rates165Loading) loadRates(draw);
   const vsk = pd.id === "vsk", SPN = "СУХОЙ ПОРТ НАХОДКА (СПН)";
   const AR = activeRates().filter(r => !r.arch && (calc.pfut || !r.future) && (vsk === /СПН|СУХОЙ\s*ПОРТ/i.test(r.contractor)));
   const tkey = r => r.contractor;
@@ -1777,7 +1832,7 @@ function portBlock(draw) {
   const wgL = pd.wg || [];
   if (!pd.kp.length && !pd.od.length && !wgL.length) { d.append(h("div", { style: "color:var(--muted);font-size:13px" }, "ЖД-ставок этого порта пока нет.")); return d; }
   if (calc.pm > (wgL.length ? 2 : 1)) calc.pm = 0;
-  if (pd.id === "vmtp" && !ratesLoaded) loadRates(draw);
+  if (pd.id === "vmtp" && (!ratesLoaded||rates165Loading)) loadRates(draw);
   const mk115 = ["kp", "od", "wg"][calc.pm];
   const isFesco115 = pd.id === 'vmtp' && mk115 !== 'wg';
   const selectedPeriod115 = isFesco115 ? fescoPeriod115(pd, mk115, !!calc.pfescoDec) : null;
@@ -1905,14 +1960,14 @@ function frCountries136(rows){return [...new Set(rows.map(r=>frCountry136(r[1]))
 
 const FRC = { "RTG": "РТГ", "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China", "GNLST": "GNLST", "DYS-VMS": "DYS-VMS", "SPECIAL (SKR/HAL)": "Special (SKR/HAL)", "CK LINE": "CK LINE" };
 async function loadFreight(draw) {
-  if (FR || frLoading) return; frLoading = true;
+  if(FR)return;freight165Waiters.add(draw);if(frLoading)return;frLoading=true;
   let j = null, err = "";
   for (let k = 0; k < 2 && !j; k++) {
     try { j = await docsCall("action=freight"); }
     catch (e) { err = e.message || "ошибка"; if (k === 0) await new Promise(r => setTimeout(r, 1500)); }
   }
   FR = j ? { rows: j.rows || [], dict: j.dict || [], file: j.file || "", updated: j.updated || "" } : { rows: [], dict: [], err: err || "ошибка" };
-  frLoading = false; draw();
+  frLoading = false; calc165Flush(freight165Waiters);
 }
 const frEtdShow = (s, t0) => {
   s = String(s || "").replace(/\s+/g, " ").trim(); if (!s) return "";
