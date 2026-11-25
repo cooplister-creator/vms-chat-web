@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 146";
+const WEB_VERSION = "25.11.2026 · сборка 147";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2102,7 +2102,7 @@ function buildBot(m) {
   const saveBot = () => { try { localStorage.setItem(BK, JSON.stringify(BOT.slice(-80).map(b => { const c = Object.assign({}, b); if (c.xlsx) { delete c.xlsx; c.text += " (кнопка Excel пропала после обновления страницы — повторите запрос)"; } delete c.apply; delete c.upload; delete c.pick; delete c.chips; return c; }))); } catch (e) {} };
   const page = h("div", { class: "page", style: "display:flex;flex-direction:column;padding:0" });
   const log = h("div", { style: "flex:1;overflow:auto;padding:16px" });
-  const inp = h("input", { class: "field", style: "margin:0;border-radius:22px", placeholder: "Какой документ нужен?" });
+  const inp = h("textarea", { class: "field", rows: "2", style: "margin:0;border-radius:16px;resize:vertical;min-width:0;flex:1;max-height:240px", placeholder: "Документ или текст тарифов РТГ (Shift+Enter — новая строка)" });
   const btn = h("button", { class: "send" }, "➤");
   // черновик не пропадает, если страница перерисовалась (переключение вкладок, новые сообщения и т.п.)
   inp.value = window.BOT_DRAFT || ""; inp.addEventListener("input", () => { window.BOT_DRAFT = inp.value; });
@@ -2218,17 +2218,18 @@ function buildBot(m) {
     busy = false; pickMode = "poa"; draw();
   }
   async function uploadMany(fs) { for (const f of fs) { while (busy) await new Promise(r => setTimeout(r, 200)); await uploadFile(f); } pendingHint = ""; }
-  async function uploadFile(f) {
+  async function uploadFile(f, rtgText = false) {
     if (busy) return;
     if (f.size > 8 * 1024 * 1024) { BOT.push({ me: false, text: "Файл больше 8 МБ" }); draw(); return; }
     busy = true; BOT.push({ me: false, text: "Читаю «" + f.name + "» и определяю, что это…" }); draw();
     try {
       const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(",")[1]); r.onerror = () => no(new Error("Не удалось прочитать файл")); r.readAsDataURL(f); });
       const t = await me.getIdToken();
-      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "smart", token: t, name: f.name, mime: f.type, b64, hint: pendingHint }) });
+      const resp = await fetch(DOCS_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify({ action: "smart", token: t, name: f.name, mime: f.type, b64, hint: rtgText ? "rtg_text" : pendingHint }) });
       const txt = await resp.text(); let j;
       try { j = JSON.parse(txt); } catch (e) { throw new Error("Скрипт ответил не в том формате (нужна новая версия развёртывания)"); }
       if (j.error) throw new Error(j.error);
+      if (rtgText && (j.kind !== "freight" || j.contractor !== "RTG" || !j.previewId)) throw new Error("Сервер не вернул предпросмотр РТГ. Обновите развёртывание GAS.");
       if (j.kind === "freight") {
         let msg = "🚢 Это прайс морского фрахта.\nФайл: " + j.file + "\nКонтрагент: " + j.contractor + "\nПредложений: " + j.total + " · линий: " + j.lines + " · портов отправления: " + j.ports + "\nСейчас в таблице: " + j.oldTotal;
         if (j.validity && j.validity.length) msg += "\n\nСроки действия (дата — предложений):\n" + j.validity.map(x => "• " + x).join("\n");
@@ -2615,6 +2616,15 @@ function buildBot(m) {
   }
   async function ask(qq) {
     let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; window.BOT_DRAFT = "";
+    const rtgLetter = /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q) && /Врангель/i.test(q);
+    const rtgCommand = /(?:РТГ|RTG)/i.test(q) && /(?:загруз|добав|импорт|залей|встав|обнов|спец\.?\s*тариф)/i.test(q) && /(?:фрахт|тариф|ставк)/i.test(q);
+    if (rtgLetter || rtgCommand) {
+      BOT.push({ me: true, text: q });
+      if (!isAdmin) { BOT.push({ me: false, text: "Загружать ставки могут только администраторы." }); draw(); return; }
+      if (!rtgLetter) { BOT.push({ me: false, text: "Вставьте полный текст письма РТГ со ставками и расписанием: рейс; порт; ETD; ETA; TEU; ограничение." }); draw(); return; }
+      await uploadFile(new File([q], "RTG_спецтарифы.txt", { type: "text/plain" }), true);
+      return;
+    }
     if (await adminCmd(q)) return;
     if (CONF.test(norm(q))) { BOT.push({ me: true, text: "🔒 (вопрос скрыт)" }); BOT.push({ me: false, text: "🔒 Это внутренняя информация — о паролях, доступах, сайтах, ссылках и устройстве системы я не рассказываю. Если нужно, обратитесь к администратору." }); draw(); return; }
     const f = followUp(q);
@@ -2635,7 +2645,7 @@ function buildBot(m) {
     if (!last.xlsx && !last.apply && !last.upload) { last.fb = true; last.q = q; }
     draw();
   }
-  btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter") ask(); };
+  btn.onclick = () => ask(); inp.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } };
   draw(); inp.focus();
   if (isDev()) { for (let i = BOT.length - 1; i >= 0; i--) if (/^💡 Новых предложений/.test(BOT[i].text || "")) BOT.splice(i, 1);
     ideasList(false).then(ds => { const nw = ds.filter(d => d.data().status !== "seen").length; if (nw) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + nw + ". Напишите «предложения», чтобы посмотреть." }); } draw(); }).catch(() => {}); }
