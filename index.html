@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 145";
+const WEB_VERSION = "25.11.2026 · сборка 146";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -1759,7 +1759,7 @@ function frCountry136(port){
 }
 function frCountries136(rows){return [...new Set(rows.map(r=>frCountry136(r[1])))].sort((a,b)=>a==='Китай'?-1:b==='Китай'?1:a==='Другие / не определено'?1:b==='Другие / не определено'?-1:a.localeCompare(b,'ru'));}
 
-const FRC = { "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China", "GNLST": "GNLST", "DYS-VMS": "DYS-VMS", "SPECIAL (SKR/HAL)": "Special (SKR/HAL)", "CK LINE": "CK LINE" };
+const FRC = { "RTG": "РТГ", "OUR LOGISTIC": "Our Logistic", "G.H FORWARDING": "G.H Forwarding", "TRANS-CHINA": "Trans-China", "GNLST": "GNLST", "DYS-VMS": "DYS-VMS", "SPECIAL (SKR/HAL)": "Special (SKR/HAL)", "CK LINE": "CK LINE" };
 async function loadFreight(draw) {
   if (FR || frLoading) return; frLoading = true;
   let j = null, err = "";
@@ -2107,7 +2107,7 @@ function buildBot(m) {
   // черновик не пропадает, если страница перерисовалась (переключение вкладок, новые сообщения и т.п.)
   inp.value = window.BOT_DRAFT || ""; inp.addEventListener("input", () => { window.BOT_DRAFT = inp.value; });
   let pickMode = "poa", pendingHint = "";
-  const fileIn = h("input", { type: "file", accept: ".pdf,.doc,.docx,.xls,.xlsx,.csv,image/*", multiple: true, style: "display:none" });
+  const fileIn = h("input", { type: "file", accept: ".txt,.pdf,.doc,.docx,.xls,.xlsx,.csv,image/*", multiple: true, style: "display:none" });
   const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить файл (доверенность или ставки)", onclick: () => { pickMode = "poa"; fileIn.click(); } }, "📎");
   const clearChat = () => { if (!confirm("Очистить переписку с помощником?")) return; BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} window.BOT_DRAFT = ""; inp.value = ""; draw(); };
   page.append(h("div", { style: "display:flex;justify-content:flex-end;padding:6px 12px 0" }, h("button", { class: "btn ghost", style: "font-size:12px;padding:4px 10px", title: "Очистить переписку", onclick: clearChat }, "🧹 Очистить чат")));
