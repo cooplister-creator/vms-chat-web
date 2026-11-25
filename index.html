@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 147";
+const WEB_VERSION = "25.11.2026 · сборка 148";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2028,15 +2028,15 @@ const isGeneric = w => /^(довер|довк|образ|письм|все|сп�
 const specific = q => norm(q).split(/[^\p{L}\p{N}]+/u).filter(w => w && !STOP.has(w) && !isGeneric(w));
 const stem = w => w.length > 6 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w;
 function searchDocs(all, q) {
-  const stems = specific(q).map(stem); if (!stems.length) return [];
-  const sc = all.map(d => { const hay = norm(d.name + " " + d.org + " " + (d.kind === "poa" ? "доверенность" : d.kind === "lib" ? "" : "образец письмо")); const hw = hay.split(/[^\p{L}\p{N}]+/u); return [d, stems.filter(s => hw.some(w => w.startsWith(s))).length]; }).filter(x => x[1] > 0);
+  const stems = specific(q).filter(w => !/^(найди|найти|найдите|покажи|покажите|инн|организации)$/.test(w)).map(stem); if (!stems.length) return [];
+  const sc = all.map(d => { const hay = norm(d.name + " " + d.org + " " + (d.inn || "") + " " + (d.kind === "poa" ? "доверенность" : d.kind === "lib" ? "" : "образец письмо")); const hw = hay.split(/[^\p{L}\p{N}]+/u); return [d, stems.filter(s => hw.some(w => w.startsWith(s))).length]; }).filter(x => x[1] === stems.length);
   if (!sc.length) return [];
   const best = Math.max(...sc.map(x => x[1])), nq = norm(q);
   let top = sc.filter(x => x[1] === best).map(x => x[0]);
   // слова «образец/письмо» и «доверенность» задают тип документа: «образец доверенности ВМС ЛАЙН» — это образец, а не сами доверенности
   const wantSample = /(^|[^\p{L}])(образ|письм)/u.test(nq), wantPoa = !wantSample && /(^|[^\p{L}])(довер|довк)/u.test(nq);
-  if (wantSample) { const t = top.filter(d => d.kind !== "poa" && d.kind !== "lib"); if (t.length) top = t; }
-  else if (wantPoa) { const t = top.filter(d => d.kind === "poa"); if (t.length) top = t; }
+  if (wantSample) { const t = top.filter(d => d.kind !== "poa" && d.kind !== "lib"); top = t; }
+  else if (wantPoa) { const t = top.filter(d => d.kind === "poa"); top = t; }
   return top.sort((a, b) => (expired(a) - expired(b)) || a.name.localeCompare(b.name, "ru")).slice(0, 8);
 }
 function parseUntil(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((s || "").trim()); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
@@ -2111,6 +2111,16 @@ function buildBot(m) {
   const clip = h("button", { class: "send", style: "background:transparent;color:inherit;box-shadow:none", title: "Загрузить файл (доверенность или ставки)", onclick: () => { pickMode = "poa"; fileIn.click(); } }, "📎");
   const clearChat = () => { if (!confirm("Очистить переписку с помощником?")) return; BOT.length = 0; BOT.push(BOT_HELLO); try { localStorage.removeItem(BK); } catch (e) {} window.BOT_DRAFT = ""; inp.value = ""; draw(); };
   page.append(h("div", { style: "display:flex;justify-content:flex-end;padding:6px 12px 0" }, h("button", { class: "btn ghost", style: "font-size:12px;padding:4px 10px", title: "Очистить переписку", onclick: clearChat }, "🧹 Очистить чат")));
+  const quick148 = h("div", {style:"display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px;border-bottom:1px solid var(--line)"});
+  function quickFill148(label, text) { quick148.append(h("button", {class:"btn ghost",style:"font-size:12px;padding:5px 9px",onclick:()=>{inp.value=text;window.BOT_DRAFT=text;inp.focus();}},label)); }
+  quickFill148("🔎 Документы", "доверенность ");
+  quickFill148("🚢 Фрахт", "найди фрахт Shanghai 40HC SOC");
+  quickFill148("🚆 ЖД", "найди ЖД ");
+  quickFill148("⚓ Порт", "документы по порту ");
+  quickFill148("🚛 Авто", "расчёт автодоставки");
+  quickFill148("📅 Сроки", "что истекает скоро");
+  if(isAdmin){quickFill148("📥 Тарифы РТГ", "Загрузи спецтарифы РТГ\n");quickFill148("📋 Места РТГ", "Обновление мест РТГ\nНаличие мест на \n");quick148.append(h("button",{class:"btn ghost",onclick:()=>clip.click()},"📎 Загрузить файл"));}
+  page.append(quick148);
   page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, isAdmin ? clip : null, inp, btn, fileIn)); m.append(page);
   fileIn.onchange = () => { const fs = Array.from(fileIn.files); fileIn.value = ""; uploadMany(fs); };
   const drop = h("div", { style: "display:none;position:absolute;inset:0;z-index:20;background:rgba(30,120,255,.14);border:3px dashed #1e78ff;border-radius:16px;align-items:center;justify-content:center;font-size:20px;font-weight:600;pointer-events:none" }, "Отпустите файл здесь");
@@ -2616,7 +2626,7 @@ function buildBot(m) {
   }
   async function ask(qq) {
     let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; window.BOT_DRAFT = "";
-    const rtgLetter = /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q) && /Врангель/i.test(q);
+    const rtgLetter = (/^Обновление мест РТГ\s*$/im.test(q) && /наличи[ея]\s+мест\s+на/i.test(q)) || /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q) && /Врангель/i.test(q);
     const rtgCommand = /(?:РТГ|RTG)/i.test(q) && /(?:загруз|добав|импорт|залей|встав|обнов|спец\.?\s*тариф)/i.test(q) && /(?:фрахт|тариф|ставк)/i.test(q);
     if (rtgLetter || rtgCommand) {
       BOT.push({ me: true, text: q });
@@ -2625,6 +2635,15 @@ function buildBot(m) {
       await uploadFile(new File([q], "RTG_спецтарифы.txt", { type: "text/plain" }), true);
       return;
     }
+    if (/^(найди|покажи|сравни)\s+(?:морской\s+)?фрахт\s+/i.test(q)) {
+      BOT.push({me:true,text:q}); busy=true; draw();
+      try { const data=await docsCall("action=freight"), query=norm(q), port=String(q.match(/(?:shanghai|ningbo|qingdao|nansha|xiamen|шанхай|нинбо|циндао)/i)||""); const size=/20\s*(dc|дс)?/i.test(q)?20:/40\s*(hc|нс)?/i.test(q)?40:0, own=/\bSOC\b/i.test(q)?"SOC":/\bCOC\b/i.test(q)?"COC":"";
+        if(!port||!size||!own) throw new Error("Укажите порт, размер и SOC/COC. Например: найди фрахт Shanghai 40HC SOC");
+        const dic=data.dict||[], today=new Date();today.setHours(0,0,0,0);const rows=(data.rows||[]).filter(r=>norm(r[1]).includes(norm(port))&&String(r[4]).toUpperCase()===own&&Number(r[size===20?5:6])>0&&!r[14]&&(!frDate(r[9])||frDate(r[9])>=today)).sort((a,b)=>a[size===20?5:6]-b[size===20?5:6]);
+        BOT.push({me:false,text:rows.length?"Предложения из базы (USD; разные условия доставки сравнивайте отдельно):\n"+rows.slice(0,10).map(r=>[dic[r[13]]||r[0],r[1]+" → "+r[2]+" / "+r[3],usd(r[size===20?5:6]),own,r[7],dic[r[10]],dic[r[11]]].filter(Boolean).join(" · ")).join("\n"):"Подходящих действующих ставок не найдено."});
+      }catch(e){BOT.push({me:false,text:"Фрахт: "+e.message});} finally{busy=false;draw();}return;
+    }
+    if (/^(найди ЖД|расчёт автодоставки|рассчитай перевозку)/i.test(q)) {BOT.push({me:true,text:q},{me:false,text:"Для этого запроса используйте существующий раздел «Расчёт» или «Эксперимент»: автоматический расчёт по тексту пока не подключён."});draw();return;}
     if (await adminCmd(q)) return;
     if (CONF.test(norm(q))) { BOT.push({ me: true, text: "🔒 (вопрос скрыт)" }); BOT.push({ me: false, text: "🔒 Это внутренняя информация — о паролях, доступах, сайтах, ссылках и устройстве системы я не рассказываю. Если нужно, обратитесь к администратору." }); draw(); return; }
     const f = followUp(q);
