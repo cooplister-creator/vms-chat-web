@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 148";
+const WEB_VERSION = "25.11.2026 · сборка 149";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2119,7 +2119,7 @@ function buildBot(m) {
   quickFill148("⚓ Порт", "документы по порту ");
   quickFill148("🚛 Авто", "расчёт автодоставки");
   quickFill148("📅 Сроки", "что истекает скоро");
-  if(isAdmin){quickFill148("📥 Тарифы РТГ", "Загрузи спецтарифы РТГ\n");quickFill148("📋 Места РТГ", "Обновление мест РТГ\nНаличие мест на \n");quick148.append(h("button",{class:"btn ghost",onclick:()=>clip.click()},"📎 Загрузить файл"));}
+  if(isAdmin){quick148.append(h("button",{class:"btn",onclick:()=>openRtg149()},"📥 РТГ · импорт"));quick148.append(h("button",{class:"btn ghost",onclick:()=>clip.click()},"📎 Загрузить файл"));}
   page.append(quick148);
   page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, isAdmin ? clip : null, inp, btn, fileIn)); m.append(page);
   fileIn.onchange = () => { const fs = Array.from(fileIn.files); fileIn.value = ""; uploadMany(fs); };
@@ -2227,6 +2227,37 @@ function buildBot(m) {
     } catch (e) { BOT.push({ me: false, text: "Не получилось разобрать файл: " + (e.message || "ошибка") }); }
     busy = false; pickMode = "poa"; draw();
   }
+  // Окно импорта РТГ: пользователь подтверждает данные, распознанные из письма/таблицы.
+  function openRtg149(initial='') {
+    if(!isAdmin||busy)return;
+    const overlay=h('div',{style:'position:fixed;inset:0;z-index:9999;background:#0008;display:flex;align-items:center;justify-content:center;padding:12px'});
+    const pane=h('div',{style:'background:var(--bg,#fff);color:var(--text,#182b43);border-radius:16px;width:min(1100px,100%);max-height:94vh;overflow:auto;padding:18px;box-shadow:0 12px 48px #0005'});
+    const close=()=>overlay.remove();
+    const status=h('div',{style:'white-space:pre-wrap;font-size:13px;margin:8px 0;color:var(--muted)'});
+    const letter=h('textarea',{class:'field',rows:8,placeholder:'Вставьте письмо РТГ без редактирования',style:'width:100%;resize:vertical'});letter.value=initial;
+    const today=new Date();const date=h('input',{class:'field',type:'date'});date.value=today.getFullYear()+'-'+pad(today.getMonth()+1)+'-'+pad(today.getDate());
+    const file=h('input',{type:'file',accept:'.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp'});
+    const wrap=h('div',{style:'overflow:auto'}), prices=[], schedule=[];
+    const ports=['Shanghai','Ningbo','Qingdao','Nansha','Xiamen'];
+    const pnorm=s=>ports.find(p=>String(s).trim().toLowerCase()===p.toLowerCase())||'';
+    const year=()=>Number(date.value.slice(0,4))||today.getFullYear();
+    const dmy=s=>{s=String(s||'').trim();let m=/^(\d{1,2})[.\/\-](\d{1,2})(?:[.\/\-](20\d{2}))?$/.exec(s);if(m){let y=+(m[3]||year());if(!m[3]&&+date.value.slice(5,7)>=11&&+m[2]===1)y++;return pad(+m[1])+'.'+pad(+m[2])+'.'+y;}m=/^(\d{1,2})[ -]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.exec(s);if(m){let mo=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(m[2].toLowerCase())+1;return dmy(m[1]+'/'+mo);}return '';};
+    const key=x=>String(x.v).replace(/N$/i,'')+'|'+String(x.p).toUpperCase();
+    function blankP(){return {v:'',p:'Shanghai',etd:'',SOC20:'',SOC40:'',COC20:'',COC40:''};}function blankS(){return {v:'',p:'Shanghai',etd:'',eta:'',n:'',limit:''};}
+    function table(title,arr,cols,make){const box=h('div',{style:'margin:14px 0'});box.append(h('strong',{},title));const t=h('table',{style:'border-collapse:collapse;width:100%;min-width:650px;margin:6px 0'});t.append(h('tr',{},...cols.map(c=>h('th',{style:'text-align:left;font-size:12px;padding:4px'},c[1])),h('th',{},'')));arr.forEach((r,i)=>{const tr=h('tr',{});cols.forEach(([k,label])=>{const el=k==='p'?h('select',{class:'field'},...ports.map(p=>h('option',{value:p},p))):h('input',{class:'field',style:'width:100%;min-width:70px;margin:0;padding:6px',placeholder:label});el.value=r[k]??'';el.addEventListener('input',()=>{r[k]=el.value;});tr.append(h('td',{style:'padding:2px'},el));});tr.append(h('td',{},h('button',{class:'btn ghost',onclick:()=>{arr.splice(i,1);render();}},'×')));t.append(tr);});box.append(t,h('button',{class:'btn ghost',onclick:()=>{arr.push(make());render();}},'+ Строка'));return box;}
+    function render(){wrap.replaceChildren(table('Ставки, USD (FILO; COC с ДРОП МСК)',prices,[['v','Рейс'],['p','Порт'],['etd','ETD'],['SOC20','SOC 20'],['SOC40','SOC 40'],['COC20','COC 20'],['COC40','COC 40']],blankP),table('Расписание и наличие мест',schedule,[['v','Рейс'],['p','Порт'],['etd','ETD'],['eta','ETA'],['n','TEU'],['limit','Ограничения']],blankS));}
+    function parseLetter(){const t=letter.value.replace(/\u00a0/g,' ');const dm=/наличи[ея]\s+мест\s+на\s+(\d{1,2})[\/.](\d{1,2})(?:[\/.](20\d{2}))?/i.exec(t);if(dm)date.value=(dm[3]||year())+'-'+pad(+dm[2])+'-'+pad(+dm[1]);let pending=[], next=[], warnings=[];const blocks=t.split(/(?:^|\n)\s*Рейс\s+/i).slice(1);blocks.forEach(b=>{const v=/^(\d+)N?\s+ETD\s+([\d/.]+)/i.exec(b);if(!v)return;pending.push({v:v[1],etd:dmy(v[2])});const p=/Ставка\s+фрахта\s*:\s*\**\s*(Shanghai|Ningbo|Qingdao|Nansha|Xiamen)\s*[-–—]\s*Врангель/i.exec(b);if(!p)return;const vals={},re=/([\d ]+)\s*\$\s*per\s*(20\s*DC|40\s*[HН][CС])\s*(COC|SOC)\s*FILO([^\n]*)/gi;let m;while((m=re.exec(b))){const k=m[3].toUpperCase()+m[2].slice(0,2);if(vals[k])warnings.push('Повтор цены '+k);vals[k]=m[1].replace(/\s/g,'');if(k.startsWith('COC')&&!/дроп\s*МСК/i.test(m[4]))warnings.push('Проверьте ДРОП МСК: '+k);}pending.forEach(x=>next.push({...blankP(),...x,p:pnorm(p[1]),...vals}));pending=[];});if(pending.length)warnings.push('Рейсы без цены: '+pending.map(x=>x.v).join(', '));if(!next.length)warnings.push('Ставки не найдены. Можно добавить строки вручную.');prices.splice(0,prices.length,...next);status.textContent=warnings.join('\n')||'Распознано ставок по рейсам: '+prices.length;render();}
+    function fromMatrix(matrix){let headers={},vcol=-1,eta=-1,teu=-1,lim=-1,out=[];for(const row of matrix){const cells=row.map(x=>String(x??'').trim());if(cells.some(c=>/Voyage/i.test(c))){headers={};vcol=cells.findIndex(c=>/Voyage/i.test(c));cells.forEach((c,i)=>{ports.forEach(p=>{if(new RegExp(p,'i').test(c))headers[i]=p;});});eta=cells.findIndex(c=>/Vrangel\s*Bay|ETA/i.test(c));teu=cells.findIndex(c=>/Available|allocation|TEU/i.test(c));lim=teu+1;continue;}if(vcol<0||teu<0||eta<0)continue;const v=/^(\d+)\s*N?$/i.exec(cells[vcol]||'');if(!v)continue;const n=cells[teu]||'';Object.entries(headers).forEach(([i,p])=>{const raw=cells[i]||'';if(!raw)return;out.push({v:v[1],p,etd:dmy(raw),eta:dmy(cells[eta]),n,limit:cells[lim]||''});});}return out;}
+    const loadScript=(src,name)=>new Promise((resolve,reject)=>{if(window[name])return resolve(window[name]);const s=h('script',{src,onload:()=>resolve(window[name]),onerror:()=>reject(Error('Не удалось загрузить библиотеку '+name))});document.head.append(s);});
+    // Изображения RTG: восстанавливаем границы таблицы по тёмным линиям, затем размещаем слова OCR по ячейкам.
+    async function imageMatrix(f){const im=await createImageBitmap(f),c=document.createElement('canvas');c.width=im.width;c.height=im.height;const cx=c.getContext('2d');cx.drawImage(im,0,0);const data=cx.getImageData(0,0,c.width,c.height).data,w=c.width,hh=c.height;const dark=(x,y)=>{let i=(y*w+x)*4;return data[i]+data[i+1]+data[i+2]<180;};function clusters(a){let r=[];for(let i=0;i<a.length;i++){let j=i;while(j+1<a.length&&a[j+1]===a[j]+1)j++;r.push(Math.round((a[i]+a[j])/2));i=j;}return r;}let yl=[];for(let y=0;y<hh;y++){let n=0;for(let x=0;x<w;x++)if(dark(x,y))n++;if(n>w*.65)yl.push(y);}const ys=clusters(yl);if(ys.length<5)throw Error('Не найдена сетка таблицы. Используйте чёткий скриншот или Excel.');const Tess=await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js','Tesseract');const worker=await Tess.createWorker('eng');let words;try{const result=await worker.recognize(c);words=result.data.words||[];}finally{await worker.terminate();}if(!words.length)throw Error('OCR не вернул текст');let result=[];for(let j=0;j<ys.length-1;j++){let y0=ys[j],y1=ys[j+1];if(y1-y0<12)continue;let xs0=[];for(let x=0;x<w;x++){let n=0;for(let y=y0+2;y<y1-2;y++)if(dark(x,y))n++;if(n>Math.max(3,(y1-y0-4)*.8))xs0.push(x);}let xs=clusters(xs0);if(y1-y0>60&&j+2<ys.length){let xx=[];const a=ys[j+1],b=ys[j+2];for(let x=0;x<w;x++){let n=0;for(let y=a+2;y<b-2;y++)if(dark(x,y))n++;if(n>Math.max(3,(b-a-4)*.8))xx.push(x);}xs=clusters(xx);}if(xs.length<6)continue;const cells=[];for(let k=0;k<xs.length-1;k++){const a=words.filter(q=>{let x=(q.bbox.x0+q.bbox.x1)/2,y=(q.bbox.y0+q.bbox.y1)/2;return x>xs[k]&&x<xs[k+1]&&y>y0&&y<y1;}).sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0);cells.push(a.map(q=>q.text).join(' '));}result.push(cells);}return result;}
+    async function parseFile(){const f=file.files[0];if(!f){status.textContent='Выберите файл расписания';return;}status.textContent='Распознаю таблицу…';try{let matrix;if(f.type.startsWith('image/'))matrix=await imageMatrix(f);else{const X=await loadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','XLSX');const wb=X.read(await f.arrayBuffer(),{type:'array',cellDates:true});matrix=wb.SheetNames.flatMap(n=>X.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:false,defval:'',dateNF:'dd/mm/yyyy'}));}const out=fromMatrix(matrix);if(!out.length)throw Error('Не удалось восстановить строки. Добавьте вручную или используйте Excel с исходной таблицей.');schedule.splice(0,schedule.length,...out);status.textContent='Распознано строк: '+out.length+'. Обязательно проверьте даты, порты и TEU по оригиналу.';render();}catch(e){status.textContent='Расписание: '+e.message;} }
+    function alignDates(){let n=0;prices.forEach(p=>{const s=schedule.find(x=>key(x)===key(p));if(s&&s.etd&&s.etd!==p.etd){p.etd=s.etd;n++;}});render();status.textContent='Согласовано ETD по расписанию: '+n;}
+    const confirmBox=h('input',{type:'checkbox'});
+    async function submit(){if(!confirmBox.checked){status.textContent='Подтвердите проверку исходных данных.';return;}const ss=schedule.map(x=>({...x,etd:dmy(x.etd),eta:dmy(x.eta)})), pp=prices.map(x=>({...x,etd:dmy(x.etd)}));const ds=date.value.split('-').reverse().join('.');if(!ss.length&&!pp.length){status.textContent='Добавьте цены или расписание';return;}const mismatch=pp.find(p=>ss.some(s=>key(s)===key(p)&&s.etd!==p.etd));if(mismatch){status.textContent='Расхождение ETD '+key(mismatch)+'. Исправьте дату или нажмите «Согласовать ETD по расписанию».';return;}if(ss.some(s=>!s.etd||!s.eta||s.n===''||!s.v)||pp.some(p=>!p.etd||!p.v||!p.SOC20||!p.SOC40||!p.COC20||!p.COC40)){status.textContent='Заполните обязательные поля в таблицах.';return;}close();await uploadFile(new File(['RTG149\n'+JSON.stringify({date:ds,prices:pp,schedule:ss})],'RTG_импорт.txt',{type:'text/plain'}),true);}
+    pane.append(h('div',{style:'display:flex;justify-content:space-between;align-items:center'},h('h2',{},'РТГ — тарифы и расписание'),h('button',{class:'btn ghost',onclick:close},'Закрыть')),h('div',{},'1. Вставьте оригинальное письмо (если обновляете цены)'),letter,h('button',{class:'btn',onclick:parseLetter},'Распознать ставки'),h('div',{style:'margin-top:12px'},'2. Дата наличия мест (из письма): ',date),file,h('button',{class:'btn',onclick:parseFile},'Распознать расписание'),status,wrap,h('button',{class:'btn ghost',onclick:alignDates},'Согласовать ETD по расписанию'),h('div',{style:'margin:12px 0'},h('label',{},confirmBox,' Проверил цены, даты, TEU, ограничения и условия FILO / ДРОП МСК по оригиналу')),h('button',{class:'btn',onclick:submit},'Отправить на предпросмотр'));overlay.append(pane);document.body.append(overlay);render();if(initial)parseLetter();
+  }
+
   async function uploadMany(fs) { for (const f of fs) { while (busy) await new Promise(r => setTimeout(r, 200)); await uploadFile(f); } pendingHint = ""; }
   async function uploadFile(f, rtgText = false) {
     if (busy) return;
@@ -2244,7 +2275,7 @@ function buildBot(m) {
         let msg = "🚢 Это прайс морского фрахта.\nФайл: " + j.file + "\nКонтрагент: " + j.contractor + "\nПредложений: " + j.total + " · линий: " + j.lines + " · портов отправления: " + j.ports + "\nСейчас в таблице: " + j.oldTotal;
         if (j.validity && j.validity.length) msg += "\n\nСроки действия (дата — предложений):\n" + j.validity.map(x => "• " + x).join("\n");
         if (j.notes && j.notes.length) msg += "\n\n" + j.notes.map(x => "ℹ️ " + x).join("\n");
-        msg += "\n\nНовый прайс заменит старые ставки этого подрядчика (остальные не тронем). Проверьте и нажмите «Применить».";
+        msg += j.contractor === "RTG" ? "\n\nОбновятся только указанные рейсы и маршруты. Проверьте и нажмите «Применить»." : "\n\nНовый прайс заменит старые ставки этого подрядчика (остальные не тронем). Проверьте и нажмите «Применить».";
         BOT.push({ me: false, text: msg, apply: j.previewId, fr: true });
       } else if (j.kind === "rates") {
         const st = j.stats;
@@ -2631,8 +2662,8 @@ function buildBot(m) {
     if (rtgLetter || rtgCommand) {
       BOT.push({ me: true, text: q });
       if (!isAdmin) { BOT.push({ me: false, text: "Загружать ставки могут только администраторы." }); draw(); return; }
-      if (!rtgLetter) { BOT.push({ me: false, text: "Вставьте полный текст письма РТГ со ставками и расписанием: рейс; порт; ETD; ETA; TEU; ограничение." }); draw(); return; }
-      await uploadFile(new File([q], "RTG_спецтарифы.txt", { type: "text/plain" }), true);
+      if (!rtgLetter) { draw(); openRtg149(); return; }
+      draw(); openRtg149(q);
       return;
     }
     if (/^(найди|покажи|сравни)\s+(?:морской\s+)?фрахт\s+/i.test(q)) {
