@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 159";
+const WEB_VERSION = "25.11.2026 · сборка 160";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2037,7 +2037,8 @@ function searchDocs(all, q) {
   const wantSample = /(^|[^\p{L}])(образ|письм)/u.test(nq), wantPoa = !wantSample && /(^|[^\p{L}])(довер|довк)/u.test(nq);
   if (wantSample) { const t = top.filter(d => d.kind !== "poa" && d.kind !== "lib"); top = t; }
   else if (wantPoa) { const t = top.filter(d => d.kind === "poa"); top = t; }
-  return top.sort((a, b) => (expired(a) - expired(b)) || a.name.localeCompare(b.name, "ru")).slice(0, 8);
+  const rank=d=>d.kind!=="poa"?0:!parseUntil(d.until)?1:expired(d)?2:0;
+  return top.sort((a, b) => (rank(a)-rank(b)) || a.name.localeCompare(b.name, "ru")).slice(0, 8);
 }
 function parseUntil(s) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((s || "").trim()); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; }
 const expired = d => { if (d.kind !== "poa") return 0; const u = parseUntil(d.until); return u && u < new Date(new Date().toDateString()) ? 1 : 0; };
@@ -2197,7 +2198,7 @@ function buildBot(m) {
   // переписка хранится в этом браузере, чтобы не пропадала при обновлении страницы (очистить: «очисти чат»)
   const BK = "vmsbot_" + (me ? me.uid : "x");
   if (!window.BOT_LOADED) { window.BOT_LOADED = true; try { const x = JSON.parse(localStorage.getItem(BK) || "null"); if (Array.isArray(x) && x.length) { BOT.length = 0; x.forEach(b => BOT.push(b)); } } catch (e) {} }
-  const saveBot = () => { try { localStorage.setItem(BK, JSON.stringify(BOT.slice(-80).map(b => { const c = Object.assign({}, b); if (c.xlsx) { delete c.xlsx; c.text += " (кнопка Excel пропала после обновления страницы — повторите запрос)"; } delete c.apply; delete c.upload; delete c.pick; delete c.chips; return c; }))); } catch (e) {} };
+  const saveBot = () => { try { localStorage.setItem(BK, JSON.stringify(BOT.slice(-80).map(b => { const c = Object.assign({}, b); if (c.xlsx) { delete c.xlsx; c.text += " (кнопка Excel пропала после обновления страницы — повторите запрос)"; } delete c.apply; delete c.upload; delete c.pick; delete c.chips; delete c.assist160Preview; return c; }))); } catch (e) {} };
   const page = h("div", { class: "page", style: "display:flex;flex-direction:column;padding:0" });
   const log = h("div", { style: "flex:1;overflow:auto;padding:16px" });
   const inp = h("textarea", { class: "field", rows: "2", style: "margin:0;border-radius:16px;resize:vertical;min-width:0;flex:1;max-height:240px", placeholder: "Документ или текст тарифов РТГ (Shift+Enter — новая строка)" });
@@ -2217,7 +2218,8 @@ function buildBot(m) {
   quickFill148("🚆 ЖД", "найди ЖД ");
   quickFill148("⚓ Порт", "документы по порту ");
   quickFill148("🚛 Авто", "расчёт автодоставки");
-  quickFill148("📅 Сроки", "что истекает скоро");
+  quickFill148("📅 Сроки тарифов", "покажи тарифы, которые заканчиваются через 7 дней");
+  quickFill148("🔎 По содержимому", "найди документ по содержимому ");
   if(isAdmin){quick148.append(h("button",{class:"btn",onclick:()=>openRtg149()},"📥 РТГ · импорт"));quick148.append(h("button",{class:"btn ghost",onclick:()=>clip.click()},"📎 Загрузить файл"));}
   if(isAdmin)quick148.append(h("button",{class:"btn ghost",onclick:()=>openHistory157()},"🕘 История тарифов"));
   page.append(quick148);
@@ -2238,6 +2240,7 @@ function buildBot(m) {
       log.append(h("div", { class: "bot" + (b.me ? " me" : "") }, h("div", { class: "bb" }, b.text)));
       if (b.upload) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => { pickMode = b.ukind || "poa"; fileIn.click(); } }, "📎 Выбрать файл")));
       if (b.apply) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0" + (b.applied || b.cancelled ? ";opacity:.55;cursor:default" : ""), disabled: !!(b.applied || b.cancelled), onclick: () => applyRates(b.apply) }, b.applied || (b.fr || b.port ? "✅ Применить" : "✅ Принять тарифы")), " ", h("button", { class: "btn ghost", disabled: !!(b.applied || b.cancelled), onclick: () => { b.cancelled = true; BOT.push({ me: false, text: "Отменено: ставки не применены. Для новой проверки загрузите файл повторно." }); draw(); } }, b.cancelled ? "Отменено" : "Отменить")));
+      if (b.assist160Preview && isAdmin && isDev()) log.append(h("div", {}, h("button", {class:"btn",disabled:busy||!!b.assist160Done,onclick:async()=>{if(busy||b.assist160Done)return;const word=prompt("Для подтверждения удаления введите УДАЛИТЬ");if(word!=="УДАЛИТЬ")return;busy=true;draw();try{const a=await history157Post("assist160_apply",{previewId:b.assist160Preview,confirm:word});b.assist160Done=true;FR=null;ratesLoaded=false;BOT.push({me:false,text:"Удалено строк: "+a.deleted+". "+(a.historyWarning||"Резервная копия сохранена.")});}catch(e){BOT.push({me:false,text:"Не получилось: "+e.message});}finally{busy=false;draw();}}},b.assist160Done?"Выполнено":"Подтвердить удаление")," ",h("button",{class:"btn ghost",disabled:busy||!!b.assist160Done,onclick:()=>{b.assist160Done=true;draw();}},"Отмена")));
       if (b.xlsx) log.append(h("div", {}, h("button", { class: "btn", style: "margin:4px 0", onclick: () => downloadXlsx(b.xname, b.xlsx).catch(e => toast(e.message || "Ошибка")) }, "📊 Скачать Excel")));
       (b.pick ? b.pick.options.concat(["Оставить в «Прочее»"]) : []).forEach(c => log.append(h("div", {}, h("button", { class: "btn ghost", style: "margin:3px 0", disabled: !!b.pickDone, onclick: () => libMove(b, c) }, c))));
       (b.choices || []).forEach(c => log.append(h("div", {}, h("button", { class: "btn ghost", style: "margin:3px 0", onclick: () => ask(b.kind + " " + c) }, c))));
@@ -2618,7 +2621,7 @@ function buildBot(m) {
         } catch (e) { DOCS = null; BOT.push({ me: false, text: "Не получилось: " + (e.message || "ошибка") }); }
         busy = false; draw(); return; }
     }
-    if (help159Match(q)) { BOT.push({me:false,text:help159Text()}); draw(); return; }
+    if (help159Match(q)) { BOT.push({me:false,text:help160Text()}); draw(); return; }
     if (/(подгруз|загруз|добав|обнов|внес|внос|занес|занос|закин|залей|залить|залив|закач|вставь)[а-яё]*\s+(нов[а-яё]*\s+)?(ставк|тариф)/.test(norm(q))) {
       BOT.push(isAdmin ? { me: false, text: "Прикрепите файл со ставками (PDF, Word или Excel). Я разберу его и покажу, что изменится — до вашего подтверждения ничего не меняется. Можно просто перетащить файл в чат или прикрепить через 📎 — сам пойму, что это.", upload: true, ukind: "rates" } : { me: false, text: "Загружать ставки могут только администраторы." });
       draw(); return;
@@ -2941,12 +2944,49 @@ function buildBot(m) {
   function help159Text() {
     return "Я «Помощник ВМС». Вот что умею:\n\n📄 ДОКУМЕНТЫ И ДОВЕРЕННОСТИ\n• Найти документ и скачать файл: «доверенность Ромашка», «КФК ВМТП», «образец».\n• Инструкции и документы по портам: «документы по порту ВМТП», «дай инструкцию Соллерс».\n• Проверить сроки: «что истекает скоро», «просроченные доверенности».\n• Выгрузить реестр в Excel: «выгрузи в экселе все доверенности».\n\n🚢 ТАРИФЫ И ЛОГИСТИКА\n• Найти и сравнить предложения морского фрахта по поддерживаемым портам: «найди фрахт Shanghai 40HC SOC». Указывайте порт, размер и SOC/COC. Разные условия доставки сравнивайте отдельно.\n• Тарифные документы портов: «Тарифы ВМТП».\n• ЖД, портовые расходы и автодоставка — используйте раздел «Расчёт»; для комбинированного маршрута — «Эксперимент». Полный расчёт по текстовому запросу пока не подключён.\n• Курсы валют: «курс доллара», «юань на бирже».\n• Словарь: «что такое ТН ВЭД», «инкотермс», «демередж», «СВХ».\n• Уточнения после поиска: «а срок?», «а вмкт?».\n• 👍/👎 — обратная связь по ответам." + (isAdmin ? "\n\n🔑 ВОЗМОЖНОСТИ АДМИНИСТРАТОРА\n• 📎 Загрузка документов и доверенностей (PDF, Word, фото), добавление в библиотеку и реестр; «удали доверенность …» — с подтверждением.\n• Импорт тарифов ЖД, морского фрахта и портов из поддерживаемых PDF, Word и Excel. Предпросмотр перед применением; подозрительные изменения ЖД выделяются. FESCO Shuttle SOC/COC — в калькулятор ВМТП.\n• «📥 РТГ · импорт» — вставить оригинальное письмо, прикрепить Excel или скриншот расписания. Можно обновить только цены или только места. Новые порты и рейсы, ETD/ETA, SOC/COC, TEU и ограничения. Нулевые места скрываются; неизвестные не считаются нулём. Проверяйте сомнительные ячейки OCR по вырезкам оригинала.\n• «🕘 История тарифов» или «история тарифов» — архив фрахта, ЖД и портов, автор и дата (если записаны), сравнение редакций, журнал действий и исходные КП при наличии.\n• Изменить ставку ЖД: «Измени Соллерс 40ф НДС 0 на 330 до 30.11», «продли Фреш до конца месяца» — через предпросмотр.\n• «Информация ЖД: …» — заметка в блоке ЖД на 30 дней." + (isDev() ? "\n\n🛠 ВОЗМОЖНОСТИ РАЗРАБОТЧИКА\n• Удаление тарифов подрядчика: «удали фрахт РТГ», «удали ЖД ЮНИОН», «удали тарифы порта ВСК». Предпросмотр, резервная копия и подтверждение.\n• Восстановление: «восстанови фрахт РТГ» или кнопка «История тарифов» → «Открыть редакцию». Выбор подрядчика, предпросмотр и слово ВОССТАНОВИТЬ.\n• Очистка архива: «История тарифов» → «Очистить историю». Отдельная запись, подрядчик, раздел, записи старше 30/60/90 дней или весь архив. Подтверждение словом ОЧИСТИТЬ. Действующие ставки, исходные КП и журнал действий сохраняются.\n• Автоочистка: хранение пяти последних копий каждого подрядчика при следующих успешных обновлениях; по умолчанию выключена. Старые архивы до 157 не очищаются выборочно.\n• Обучение и обратная связь: «запомни: вопрос = ответ», «предложения», «отработанные», «готово все», «что не нашлось», «чему ты научился», «забудь: вопрос».\n• «напоминания», «разреши почты: …», «список почт»." : "") : "");
   }
+  function help160Text(){return help159Text()+"\n\nНОВОЕ В 160\n• Поиск по ИНН и содержимому: найди документ по ИНН 1234567890; найди документ по содержимому …\n• Найди ЖД Москва; покажи портовые ставки ВСК.\n• Покажи просроченные тарифы; покажи тарифы, которые заканчиваются через 7 дней.\n• Расчёт авто: рассчитай авто Москва; 20; 22; Волоколамск.\n• Рассчитай перевозку — открывает конструктор."+(isDev()?"\n• Удали рейс РТГ 833; удали фрахт Sinokor из Shanghai; удали ЖД ЮНИОН до Москвы; удали просроченные тарифы фрахта. Предпросмотр и подтверждение обязательны.":"");}
+  // 160: explicit tariff commands run before document search; mutations only through protected server preview.
+  function assist160Query(q) {
+    let t=q.trim(), m, del=/^удали\s+/i.test(t); if(del)t=t.replace(/^удали\s+/i,'');else t=t.replace(/^(?:покажи|найди|сравни)\s+/i,'');
+    m=/^рейс\s+(.+?)\s+(\d+[a-z]?)$/i.exec(t);if(del&&m)return {del,kind:'freight',mode:'filter',contractor:m[1],voyage:m[2]};
+    m=/^(просроченные\s+тарифы|тарифы\s*,?\s*которые\s+заканчиваются)(?:\s+(фрахта|жд))?(?:\s+через\s+(\d+)\s*(?:дней|дня|день))?$/i.exec(t);
+    if(m)return {del,kind:m[2]?(m[2].toLowerCase()==='жд'?'rail':'freight'):'both',mode:/^просроч/i.test(m[1])?'expired':'soon',days:m[3]?+m[3]:7};
+    m=/^(фрахт|жд|ставки)\s+(.+?)\s+(?:из|от)\s+(.+?)(?:\s+(?:до|в)\s+(.+))?$/i.exec(t);
+    if(del&&m&&m[1].toLowerCase()==='фрахт')return {del,kind:'freight',mode:'filter',contractor:m[2],origin:m[3],destination:m[4]||''};
+    m=/^(фрахт|жд|ставки)\s+(.+?)\s+(?:до|в)\s+(.+)$/i.exec(t);
+    if(del&&m)return {del,kind:m[1].toLowerCase()==='фрахт'?'freight':'rail',mode:'filter',contractor:m[2],destination:m[3]};
+    return null;
+  }
+  async function assist160Handle(q){
+    const spec=assist160Query(q); const dmatch=/^(?:найди|покажи|поиск)\s+(?:документ(?:ы)?\s+)?по\s+(?:содержимому|инн)\s*[:：]?\s*(.+)$/i.exec(q)||/^(?:найди\s+)?(?:доверенность|доверенности)\s+(?:по\s+)?инн\s*[:：]?\s*(\d{10}|\d{12})$/i.exec(q);
+    const rail=/^(?:найди|покажи|сравни)\s+жд\s+(.+)$/i.exec(q), port=/^(?:найди|покажи|сравни)\s+портовые\s+ставки\s+(.+)$/i.exec(q);
+    const auto=/^рассчитай\s+авто\s+(.+)$/i.exec(q), route=/^рассчитай\s+перевозку(?:\s+(.+))?$/i.exec(q);
+    if(!spec&&!dmatch&&!rail&&!port&&!auto&&!route)return false;
+    BOT.push({me:true,text:q});busy=true;draw();
+    try{
+      if(spec){
+        if(spec.del&&(!isAdmin||!isDev()))throw Error('Удаление доступно только разработчику.');
+        if(spec.del&&spec.kind==='both')throw Error('Укажите раздел: «удали просроченные тарифы фрахта» или «удали просроченные тарифы ЖД».');
+        const kinds=spec.kind==='both'?['freight','rail']:[spec.kind];
+        for(const kind of kinds){const p={...spec,kind},j=await history157Post(spec.del?'assist160_preview':'assist160_list',p),label=kind==='rail'?'ЖД':'Фрахт';
+          BOT.push({me:false,text:label+': найдено '+j.count+' строк'+(j.truncated?' (показаны первые 100)':'')+(j.count?'\n'+j.items.map(r=>[r.contractor,r.route,r.detail,r.until?'до '+r.until:''].filter(Boolean).join(' · ')).join('\n'):'')});
+          if(spec.del&&j.previewId){BOT.push({me:false,text:'Проверьте список. Будет удалено '+j.count+' строк. Перед удалением создаётся архив. Предпросмотр действует 10 минут.',assist160Preview:j.previewId});}
+        }
+      }else if(dmatch){const phrase=dmatch[1].trim();const j=await history157Post('assist160_docs',{q:phrase,type:/доверенност/i.test(q)?'poa':''});BOT.push({me:false,text:j.count?'Найдено документов по метаданным и индексу Google Диска: '+j.count+(j.incomplete?' (поиск ограничен, уточните фразу)':''):'Документы не найдены в доступном каталоге и индексе Google Диска.',docs:j.docs||[]});}
+      else if(rail){const city=norm(rail[1]).replace(/^(до|в)\s+/,'').trim(),j=await docsCall('action=rates'),today=new Date();today.setHours(0,0,0,0);const rows=(j.rates||[]).filter(r=>[r.city,r.station].some(v=>norm(String(v||''))===city)&&(!frDate(r.from)||frDate(r.from)<=today)&&(!frDate(r.to)||frDate(r.to)>=today)).sort((a,b)=>a.type-b.type||a.vat-b.vat||a.price-b.price);BOT.push({me:false,text:rows.length?'Действующие базовые ЖД-ставки (разные весовые категории и НДС сравниваются отдельно; охрана/ПРР не включены в сравнение):\n'+rows.slice(0,40).map(r=>[r.contractor,r.station,'категория '+r.type,money(r.price),'НДС '+r.vat+'%',r.guard?'охрана '+money(r.guard):'',r.to].filter(Boolean).join(' · ')).join('\n'):'Ставки по этому городу или станции не найдены.'});}
+      else if(port){const term=norm(port[1]).trim(),j=await docsCall('action=port'),ps=(j.ports||[]).filter(p=>norm(p.name).includes(term)||norm(p.id)===term);BOT.push({me:false,text:ps.length?ps.map(p=>p.name+'\n'+(p.port||[]).slice(0,25).map(r=>r.n+' · '+money(r.p)+' / '+r.u).join('\n')).join('\n\n'):'Порт не найден. Укажите название или код, например ВСК.'});}
+      else if(auto){const parts=auto[1].split(';').map(x=>x.trim()),city=Object.keys(AUTO131_DATA).find(x=>norm(x)===norm(parts[0]||''));if(!city||parts.length<4||!/^(20|40)$/.test(parts[1])||!/^\d+(?:[.,]\d+)?$/.test(parts[2]))throw Error('Формат: рассчитай авто Москва; 20; 22; Волоколамск (город, размер, вес груза, направление). Только Москва, Самара, Иркутск и Нижний Новгород; другие — в калькуляторе.');if(!['Москва','Самара','Иркутск','Нижний Новгород'].includes(city))throw Error('Для этого города укажите дополнительные параметры в калькуляторе.');const d=AUTO131_DATA[city],size=parts[1]==='40'?1:0,w=Number(parts[2].replace(',','.')),dest=parts[3],km=d.dest[dest];if(city==='Москва'&&km==null)throw Error('Направление отсутствует в справочнике расстояний.');const a={city,size,weight:w,gross:w+(size?4:2.2),kind:parts[4]==='ВТТ'?'vtt':'gtd',dest,km,pv:false,tk:false};const r=auto131Calc(a);BOT.push({me:false,text:r.total==null?'Для направления нет полного тарифа либо превышен допустимый вес. Используйте калькулятор.':city+' → '+dest+' · '+parts[1]+'′ · '+w+' т · '+a.kind.toUpperCase()+'\nРаскредитация: '+money(r.credit)+'\nАвтовывоз: '+money(r.pickup)+'\nМежгород: '+money(r.km)+'\nПеревес: '+money(r.heavy)+'\nИтого: '+money(r.total)+'\nБез ПВ и дополнительных услуг. '+r.note});}
+      else if(route){BOT.push({me:false,text:'Открываю существующий конструктор маршрута. Выберите конкретные предложения фрахта, порта, ЖД и авто; суммы рассчитываются действующими формулами. Автоматическое заполнение всех этапов из свободного текста пока не реализовано.'});saveBot();tab='experiment';renderTab();}
+    }catch(e){BOT.push({me:false,text:'Не получилось: '+e.message});}finally{busy=false;draw();}return true;
+  }
+
   async function ask(qq) {
     let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; window.BOT_DRAFT = "";
-    if (help159Match(q)) { BOT.push({me:true,text:q},{me:false,text:help159Text()}); draw(); return; }
+    if (help159Match(q)) { BOT.push({me:true,text:q},{me:false,text:help160Text()}); draw(); return; }
+    if (await assist160Handle(q)) return;
     const historyCmd157 = /^(?:(?:покажи\s+)?(?:истори[яю]|архив)\s+(?:тарифов|ставок|фрахта|жд|портов)(?:\s+(.+))?|восстанови\s+(?:тарифы|ставки|фрахт|жд|порт)(?:\s+(.+))?)$/i.exec(q);
     if(historyCmd157){BOT.push({me:true,text:q});if(!isAdmin){BOT.push({me:false,text:"История тарифов доступна администраторам."});draw();return;}draw();const k=/(?:^|\s)фрахт/i.test(q)?"freight":/(?:^|\s)жд(?:\s|$)/i.test(q)?"rail":/(?:^|\s)порт/i.test(q)?"port":"";openHistory157(k,historyCmd157[1]||historyCmd157[2]||"");return;}
-    const rtgLetter = (/^Обновление мест РТГ\s*$/im.test(q) && /наличи[ея]\s+мест\s+на/i.test(q)) || /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q) && /Врангель/i.test(q);
+    const rtgLetter = (/^Обновление мест РТГ\s*$/im.test(q) && /наличи[ея]\s+мест\s+на/i.test(q)) || /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q);
     const rtgCommand = /(?:РТГ|RTG)/i.test(q) && /(?:загруз|добав|импорт|залей|встав|обнов|спец\.?\s*тариф)/i.test(q) && /(?:фрахт|тариф|ставк)/i.test(q);
     if (rtgLetter || rtgCommand) {
       BOT.push({ me: true, text: q });
@@ -2957,7 +2997,7 @@ function buildBot(m) {
     }
     if (/^(найди|покажи|сравни)\s+(?:морской\s+)?фрахт\s+/i.test(q)) {
       BOT.push({me:true,text:q}); busy=true; draw();
-      try { const data=await docsCall("action=freight"), query=norm(q), port=String(q.match(/(?:shanghai|ningbo|qingdao|nansha|xiamen|шанхай|нинбо|циндао)/i)||""); const size=/20\s*(dc|дс)?/i.test(q)?20:/40\s*(hc|нс)?/i.test(q)?40:0, own=/\bSOC\b/i.test(q)?"SOC":/\bCOC\b/i.test(q)?"COC":"";
+      try { const data=await docsCall("action=freight"), query=norm(q), port=([...new Set((data.rows||[]).map(r=>r[1]))].sort((a,b)=>b.length-a.length).find(p=>query.includes(norm(p)))||String(q.match(/(?:shanghai|ningbo|qingdao|nansha|xiamen|шанхай|нинбо|циндао)/i)||"")); const size=/\b20(?:\s*(?:dc|gp))?\b|20\s*дс/i.test(q)?20:/\b40(?:\s*(?:hc|hq))?\b|40\s*нс/i.test(q)?40:0, own=/\bSOC\b/i.test(q)?"SOC":/\bCOC\b/i.test(q)?"COC":"";
         if(!port||!size||!own) throw new Error("Укажите порт, размер и SOC/COC. Например: найди фрахт Shanghai 40HC SOC");
         const dic=data.dict||[], today=new Date();today.setHours(0,0,0,0);const rows=(data.rows||[]).filter(r=>norm(r[1]).includes(norm(port))&&String(r[4]).toUpperCase()===own&&Number(r[size===20?5:6])>0&&!r[14]&&(!frDate(r[9])||frDate(r[9])>=today)).sort((a,b)=>a[size===20?5:6]-b[size===20?5:6]);
         BOT.push({me:false,text:rows.length?"Предложения из базы (USD; разные условия доставки сравнивайте отдельно):\n"+rows.slice(0,10).map(r=>[dic[r[13]]||r[0],r[1]+" → "+r[2]+" / "+r[3],usd(r[size===20?5:6]),own,r[7],dic[r[10]],dic[r[11]]].filter(Boolean).join(" · ")).join("\n"):"Подходящих действующих ставок не найдено."});
@@ -2988,6 +3028,7 @@ function buildBot(m) {
   draw(); inp.focus();
   if (isDev()) { for (let i = BOT.length - 1; i >= 0; i--) if (/^💡 Новых предложений/.test(BOT[i].text || "")) BOT.splice(i, 1);
     ideasList(false).then(ds => { const nw = ds.filter(d => d.data().status !== "seen").length; if (nw) { BOT.push({ me: false, text: "💡 Новых предложений от сотрудников: " + nw + ". Напишите «предложения», чтобы посмотреть." }); } draw(); }).catch(() => {}); }
+  if(isAdmin){(async()=>{try{const key="vms160Expiry_"+me.uid,day=new Date().toLocaleDateString("sv-SE",{timeZone:"Asia/Vladivostok"});if(localStorage.getItem(key)===day)return;const data=await Promise.all(["freight","rail"].map(kind=>history157Post("assist160_list",{kind,mode:"soon",days:7})));localStorage.setItem(key,day);if(data.some(x=>x.count)){BOT.push({me:false,text:"📅 В ближайшие 7 дней заканчиваются ставки: фрахт — "+data[0].count+", ЖД — "+data[1].count+". Напишите «покажи тарифы, которые заканчиваются через 7 дней»."});draw();}}catch(e){console.warn("Контроль сроков",e);}})();}
   // разработчику — напоминание о ближайших сроках (не чаще раза в сутки по каждому)
   if (isDev()) loadDevNotes().then(() => { const today = new Date().toDateString(); let add = false;
     DEV_REMINDERS.forEach(r => { if (remLeft(r) <= r.warn) { const k = "vmsrem_" + r.date; let seen = ""; try { seen = localStorage.getItem(k) || ""; } catch (e) {}
