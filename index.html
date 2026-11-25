@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 157";
+const WEB_VERSION = "25.11.2026 · сборка 158";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2109,7 +2109,7 @@ function openHistory157(initialKind="", hint="") {
   const names={freight:"Фрахт",rail:"ЖД",port:"Порты"};
   const actions={freight_apply:"Применение фрахта",rates_apply:"Применение ЖД",port_apply:"Применение порта",rates_delete:"Удаление архива ЖД",rates_remove:"Удаление ставки ЖД",port_clear:"Очистка порта",rates_wipe:"Очистка тарифов",rates_wipe_scope:"Удаление тарифов",history_restore:"Восстановление",legacy:"Старая резервная копия"};
   const statuses={complete:"Применено",unchanged:"Без изменений",pending:"Сохранена копия до операции",failed:"Ошибка операции",partial:"Итог не записан",legacy:"Архив до версии 157"};
-  let kind=Object.hasOwn(names,initialKind)?initialKind:"",offset=0,seq=0,closed=false;
+  let kind=Object.hasOwn(names,initialKind)?initialKind:"",offset=0,seq=0,closed=false,canClean=false;
   const head=h("div",{style:"display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px"},h("h2",{style:"margin:0;font-size:19px"},"🕘 История тарифов"),h("button",{class:"btn ghost",onclick:()=>close()},"Закрыть"));
   const nav=h("div",{style:"display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"});
   const body=h("div",{style:"min-width:0"});host.append(head,nav,body);
@@ -2121,7 +2121,7 @@ function openHistory157(initialKind="", hint="") {
   const start=t=>{const id=++seq;body.replaceChildren(note(t));return id;};
   const valid=id=>!closed&&seq===id;
   const fail=(e,back)=>{body.replaceChildren(note("Не получилось: "+(e.message||e)),btn("Назад",back||(()=>list())));};
-  const navDraw=(audit=false)=>{nav.replaceChildren();[["","Все"],...Object.entries(names)].forEach(([k,n])=>nav.append(btn(n,()=>{kind=k;offset=0;list();},audit||kind!==k)));nav.append(btn("Журнал действий",auditList,!audit));};
+  const navDraw=(audit=false)=>{nav.replaceChildren();[["","Все"],...Object.entries(names)].forEach(([k,n])=>nav.append(btn(n,()=>{kind=k;offset=0;list();},audit||kind!==k)));nav.append(btn("Журнал действий",auditList,!audit));if(canClean)nav.append(btn("Очистить историю",()=>cleanup()));};
   function changeTable(title,d,opened) {
     const box=h("details",{open:!!opened,style:"margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:9px"},h("summary",{style:"cursor:pointer;font-weight:600"},title+" · "+(d.added+d.changed+d.removed)),note(stat(d)));
     if(!d.examples||!d.examples.length){box.append(note("Различий нет."));return box;}
@@ -2134,12 +2134,30 @@ function openHistory157(initialKind="", hint="") {
   }
   async function list(){
     navDraw();const id=start("Загружаю список резервных копий…");
-    try{const j=await history157Post("history_list",{kind,offset});if(!valid(id))return;body.replaceChildren(note("Архив содержит копии до и после операций начиная с версии 157, а также ранее сохранённые резервные копии. В старых копиях автор мог не записываться. Восстановление — только выбранного подрядчика или порта."));
+    try{const j=await history157Post("history_list",{kind,offset});if(!valid(id))return;canClean=!!j.canRestore;navDraw();body.replaceChildren(note("Архив содержит копии до и после операций начиная с версии 157, а также ранее сохранённые резервные копии. В старых копиях автор мог не записываться. Восстановление — только выбранного подрядчика или порта."));
       body.append(h("div",{style:"font-size:12px;color:var(--muted);margin:8px 0"},"Всего копий: "+j.total+(j.canRestore?" · Доступно восстановление":" · Только просмотр")));
       if(!j.rows.length)body.append(note("Пока нет сохранённых редакций в выбранном разделе."));
       j.rows.forEach(r=>{const p=panel();p.append(h("div",{style:"display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"},h("b",{},(names[r.kind]||r.kind)+" · "+(actions[r.action]||r.action||"Копия")),h("span",{style:"color:var(--muted);font-size:12px"},stamp(r.ts))));p.append(note((r.actor||"Не записан")+" · "+(statuses[r.status]||r.status)));
-        (r.summary||[]).slice(0,5).forEach(s=>p.append(h("div",{style:"font-size:12px;margin:4px 0"},s.label+": +"+s.added+" / ~"+s.changed+" / −"+s.removed)));if((r.summary||[]).length>5)p.append(note("И другие подрядчики"));if(r.error)p.append(note(r.error));p.append(btn("Открыть редакцию",()=>detail(r.id),false));body.append(p);});
+        (r.summary||[]).slice(0,5).forEach(s=>p.append(h("div",{style:"font-size:12px;margin:4px 0"},s.label+": +"+s.added+" / ~"+s.changed+" / −"+s.removed)));if((r.summary||[]).length>5)p.append(note("И другие подрядчики"));if(r.error)p.append(note(r.error));p.append(btn("Открыть редакцию",()=>detail(r.id),false));if(canClean)p.append(btn("Удалить запись",()=>cleanup(r.id)));body.append(p);});
       const pg=h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-top:10px"});if(offset>0)pg.append(btn("← Назад",()=>{offset=Math.max(0,offset-40);list();}));pg.append(h("span",{style:"font-size:12px;color:var(--muted)"},j.total?`${offset+1}–${Math.min(offset+40,j.total)} из ${j.total}`:"0"));if(offset+40<j.total)pg.append(btn("Далее →",()=>{offset+=40;list();}));body.append(pg);
+    }catch(e){if(valid(id))fail(e,()=>list());}
+  }
+  async function cleanup(singleId=""){
+    const id=start("Загружаю параметры очистки…");
+    try{const j=await history157Post("history_cleanup_catalog");if(!valid(id))return;
+      body.replaceChildren(btn("← К истории",()=>{offset=0;list();}),h("h3",{},"Очистка истории тарифов"),note("Действующие тарифы, исходные КП и журнал действий не удаляются. Целые архивы перемещаются в корзину Google Диска; при выборочной очистке общие архивы переписываются без выбранных данных. Такие изменения нельзя отменить через историю."));
+      const mode=h("select",{class:"field"},...[["scope","История подрядчика / порта"],["age","Записи старше заданного срока"],["keep","Оставить 5 последних копий каждого подрядчика"],["all","Все архивы"],...(singleId?[["one","Только выбранная запись"]]:[])].map(([v,t])=>h("option",{value:v},t)));
+      if(singleId)mode.value="one";
+      const section=h("select",{class:"field"},h("option",{value:""},"Все разделы"),...Object.entries(names).map(([k,t])=>h("option",{value:k},t)));
+      section.value=kind;
+      const scope=h("select",{class:"field"},...j.scopes.map((x,i)=>h("option",{value:String(i)},names[x.kind]+" · "+x.label)));
+      const days=h("select",{class:"field"},...[30,60,90].map(n=>h("option",{value:String(n)},n+" дней")));
+      const old=h("input",{type:"checkbox"});const oldLabel=h("label",{style:"display:flex;align-items:center;gap:8px;margin:8px 0"},old,"Включить старые резервные копии до версии 157 (целиком)");
+      const fields=h("div",{}), result=h("div",{});let request=0;
+      const refresh=()=>{request++;result.replaceChildren();fields.replaceChildren();if(mode.value==="scope")fields.append(ctrl("Подрядчик / порт",scope),note("Выборочная очистка действует только для архивов начиная с версии 157."));else if(mode.value!=="one"){fields.append(ctrl("Раздел",section));if(mode.value==="age")fields.append(ctrl("Возраст",days));if(["age","all"].includes(mode.value))fields.append(oldLabel);} };mode.onchange=refresh;[section,scope,days,old].forEach(x=>x.onchange=()=>{request++;result.replaceChildren();});
+      const preview=btn("Предпросмотр очистки",async()=>{const run=++request;preview.disabled=true;result.replaceChildren(note("Проверяю архивы…"));try{const x=j.scopes[Number(scope.value)];if(mode.value==="scope"&&!x)throw new Error("Нет подрядчиков для очистки");const p={mode:mode.value,kind:mode.value==="scope"?x.kind:section.value,scope:mode.value==="scope"?x.scope:"",id:singleId,days:Number(days.value),legacy:old.checked};const r=await history157Post("history_cleanup_preview",p);if(!valid(id)||run!==request)return;result.replaceChildren(note("Архивов: "+r.total+" · в корзину: "+r.trash+" · частично очищаются: "+r.edit));r.rows.forEach(z=>result.append(note(stamp(z.ts)+" · "+names[z.kind]+" · "+(z.trash?"в корзину":"выборочная очистка")+" · "+z.scopes.join(", "))));if(r.total>r.rows.length)result.append(note("Показаны первые "+r.rows.length+" архивов."));if(!r.token)return;const word=h("input",{class:"field",placeholder:"Введите ОЧИСТИТЬ"});const go=btn("Подтвердить очистку",async()=>{go.disabled=true;word.disabled=true;try{const z=await history157Post("history_cleanup_apply",{previewId:r.token,confirm:word.value.trim()});if(!closed){body.replaceChildren(note("Очистка завершена. В корзину: "+z.trash+" · изменено архивов: "+z.edit),btn("К истории",()=>{offset=0;list();},false));}}catch(e){if(!closed)result.append(note(e.message||String(e)));}},false);go.disabled=true;word.oninput=()=>go.disabled=word.value.trim()!=="ОЧИСТИТЬ";result.append(word,go);}catch(e){if(valid(id)&&run===request)result.replaceChildren(note(e.message||String(e)));}finally{preview.disabled=false;}},false);
+      body.append(ctrl("Режим",mode),fields,preview,result);refresh();
+      const auto=panel(),word=h("input",{class:"field",placeholder:"Введите ОЧИСТИТЬ"});auto.append(h("b",{},"Автоматическое хранение пяти копий"),note("Сейчас: "+(j.auto?"включено":"выключено")+". При следующих успешных обновлениях тарифов сохраняются пять последних архивных снимков каждого подрядчика. Старые архивы до версии 157 и незавершённые операции не затрагиваются."));const change=btn(j.auto?"Выключить автоочистку":"Включить автоочистку",async()=>{change.disabled=true;try{await history157Post("history_cleanup_auto",{enabled:!j.auto,confirm:word.value.trim()});if(valid(id))cleanup(singleId);}catch(e){if(valid(id))auto.append(note(e.message||String(e)));}},false);change.disabled=true;word.oninput=()=>change.disabled=word.value.trim()!=="ОЧИСТИТЬ";auto.append(word,change);body.append(auto);
     }catch(e){if(valid(id))fail(e,()=>list());}
   }
   async function auditList(){navDraw(true);const id=start("Загружаю журнал…");try{const j=await history157Post("history_audit");if(!valid(id))return;body.replaceChildren(note("Последние записи действующего журнала GAS. Старые записи показывают сотрудника и действие, если они были сохранены; не все из них связаны с конкретным архивным файлом."));if(!j.rows.length)body.append(note("Записей нет."));j.rows.forEach(r=>{const p=panel();p.append(h("b",{},r.action),note(r.date+" · "+r.actor),h("div",{style:"white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px"},r.detail));body.append(p);});}catch(e){if(valid(id))fail(e,()=>list());}}
