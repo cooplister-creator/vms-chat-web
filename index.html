@@ -610,7 +610,7 @@ function authRu(e) {
     "network-request-failed": "Нет связи с интернетом", "missing-password": "Введите пароль", "missing-email": "Введите почту", "operation-not-allowed": "Вход по почте отключён", "internal-error": "Внутренняя ошибка, попробуйте позже", "requires-recent-login": "Войдите заново и повторите" };
   return M[c] || "Не удалось выполнить вход. Проверьте почту и пароль";
 }
-const WEB_VERSION = "25.11.2026 · сборка 156";
+const WEB_VERSION = "25.11.2026 · сборка 157";
 (function updateWatch() {
   let shown = false;
   async function check() {
@@ -2094,6 +2094,86 @@ async function loadDevNotes() {
   try { const sn = await db.collection("devNotes").get(); DEV_REMINDERS = sn.docs.map(d => Object.assign({ id: d.id }, d.data())).filter(x => x.date && x.text).map(x => Object.assign(x, { warn: +x.warn || 30 })).sort((x, y) => x.date < y.date ? -1 : 1); }
   catch (e) { DEV_REMINDERS = []; }
 }
+/* ---------- 157: история и безопасное восстановление тарифов ---------- */
+async function history157Post(action, extra={}) {
+  const tk=await me.getIdToken();
+  const r=await fetch(DOCS_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({},extra,{action,token:tk}))});
+  let j;try{j=JSON.parse(await r.text());}catch(e){throw new Error("Сервер вернул не JSON. Проверьте развёртывание GAS.");}
+  if(j.error)throw new Error(j.error+(/Неизвестное действие/.test(j.error)?" · Обновите Docs.gs, добавьте History.gs и разверните новую версию GAS.":""));return j;
+}
+function openHistory157(initialKind="", hint="") {
+  if(!isAdmin){toast("История тарифов доступна администраторам");return;}
+  const host=h("div",{style:"width:min(960px,86vw);min-width:0"});
+  const close=modal(host,()=>{closed=true;seq++;});
+  const frame=host.closest(".modal");if(frame){frame.style.maxWidth="min(1040px,96vw)";frame.style.padding="16px";}
+  const names={freight:"Фрахт",rail:"ЖД",port:"Порты"};
+  const actions={freight_apply:"Применение фрахта",rates_apply:"Применение ЖД",port_apply:"Применение порта",rates_delete:"Удаление архива ЖД",rates_remove:"Удаление ставки ЖД",port_clear:"Очистка порта",rates_wipe:"Очистка тарифов",rates_wipe_scope:"Удаление тарифов",history_restore:"Восстановление",legacy:"Старая резервная копия"};
+  const statuses={complete:"Применено",unchanged:"Без изменений",pending:"Сохранена копия до операции",failed:"Ошибка операции",partial:"Итог не записан",legacy:"Архив до версии 157"};
+  let kind=Object.hasOwn(names,initialKind)?initialKind:"",offset=0,seq=0,closed=false;
+  const head=h("div",{style:"display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:10px"},h("h2",{style:"margin:0;font-size:19px"},"🕘 История тарифов"),h("button",{class:"btn ghost",onclick:()=>close()},"Закрыть"));
+  const nav=h("div",{style:"display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px"});
+  const body=h("div",{style:"min-width:0"});host.append(head,nav,body);
+  const btn=(t,fn,ghost=true)=>h("button",{class:ghost?"btn ghost":"btn",style:"font-size:13px;padding:7px 10px",onclick:fn},t);
+  const note=(t)=>h("div",{class:"note",style:"white-space:pre-wrap;margin:7px 0;overflow-wrap:anywhere"},t);
+  const panel=()=>h("div",{style:"border:1px solid var(--line);border-radius:11px;padding:10px;margin:8px 0;min-width:0"});
+  const stamp=t=>{try{return new Date(t).toLocaleString("ru-RU",{timeZone:"Asia/Vladivostok",dateStyle:"short",timeStyle:"short"});}catch(e){return t||"";}};
+  const stat=d=>"Строк: "+d.before+" → "+d.after+" · добавлено "+d.added+" · изменено "+d.changed+" · удалено "+d.removed;
+  const start=t=>{const id=++seq;body.replaceChildren(note(t));return id;};
+  const valid=id=>!closed&&seq===id;
+  const fail=(e,back)=>{body.replaceChildren(note("Не получилось: "+(e.message||e)),btn("Назад",back||(()=>list())));};
+  const navDraw=(audit=false)=>{nav.replaceChildren();[["","Все"],...Object.entries(names)].forEach(([k,n])=>nav.append(btn(n,()=>{kind=k;offset=0;list();},audit||kind!==k)));nav.append(btn("Журнал действий",auditList,!audit));};
+  function changeTable(title,d,opened) {
+    const box=h("details",{open:!!opened,style:"margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:9px"},h("summary",{style:"cursor:pointer;font-weight:600"},title+" · "+(d.added+d.changed+d.removed)),note(stat(d)));
+    if(!d.examples||!d.examples.length){box.append(note("Различий нет."));return box;}
+    const scroll=h("div",{style:"overflow-x:auto;max-height:350px;overflow-y:auto"});
+    const tab=h("table",{style:"width:100%;border-collapse:collapse;font-size:12px;text-align:left;min-width:560px"});
+    const cell=(tag,t,style="")=>h(tag,{style:"padding:7px;border-bottom:1px solid var(--line);vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere;"+style},t||"—");
+    tab.append(h("thead",{},h("tr",{},cell("th","Строка"),cell("th","До"),cell("th","После"))));
+    const tb=h("tbody",{});d.examples.forEach(x=>{const mark=x.type==="added"?"+":x.type==="removed"?"−":"~";const suffix=x.type==="changed"&&x.before===x.after?"\n(изменились служебные данные / источник)":"";tb.append(h("tr",{},cell("td",mark+" "+x.label+suffix,"font-weight:600;"),cell("td",x.before),cell("td",x.after)));});tab.append(tb);scroll.append(tab);box.append(scroll);
+    if(d.added+d.removed+d.changed>d.examples.length)box.append(note("Показаны первые "+d.examples.length+" изменений. Счётчики учитывают все строки."));return box;
+  }
+  async function list(){
+    navDraw();const id=start("Загружаю список резервных копий…");
+    try{const j=await history157Post("history_list",{kind,offset});if(!valid(id))return;body.replaceChildren(note("Архив содержит копии до и после операций начиная с версии 157, а также ранее сохранённые резервные копии. В старых копиях автор мог не записываться. Восстановление — только выбранного подрядчика или порта."));
+      body.append(h("div",{style:"font-size:12px;color:var(--muted);margin:8px 0"},"Всего копий: "+j.total+(j.canRestore?" · Доступно восстановление":" · Только просмотр")));
+      if(!j.rows.length)body.append(note("Пока нет сохранённых редакций в выбранном разделе."));
+      j.rows.forEach(r=>{const p=panel();p.append(h("div",{style:"display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"},h("b",{},(names[r.kind]||r.kind)+" · "+(actions[r.action]||r.action||"Копия")),h("span",{style:"color:var(--muted);font-size:12px"},stamp(r.ts))));p.append(note((r.actor||"Не записан")+" · "+(statuses[r.status]||r.status)));
+        (r.summary||[]).slice(0,5).forEach(s=>p.append(h("div",{style:"font-size:12px;margin:4px 0"},s.label+": +"+s.added+" / ~"+s.changed+" / −"+s.removed)));if((r.summary||[]).length>5)p.append(note("И другие подрядчики"));if(r.error)p.append(note(r.error));p.append(btn("Открыть редакцию",()=>detail(r.id),false));body.append(p);});
+      const pg=h("div",{style:"display:flex;justify-content:space-between;align-items:center;margin-top:10px"});if(offset>0)pg.append(btn("← Назад",()=>{offset=Math.max(0,offset-40);list();}));pg.append(h("span",{style:"font-size:12px;color:var(--muted)"},j.total?`${offset+1}–${Math.min(offset+40,j.total)} из ${j.total}`:"0"));if(offset+40<j.total)pg.append(btn("Далее →",()=>{offset+=40;list();}));body.append(pg);
+    }catch(e){if(valid(id))fail(e,()=>list());}
+  }
+  async function auditList(){navDraw(true);const id=start("Загружаю журнал…");try{const j=await history157Post("history_audit");if(!valid(id))return;body.replaceChildren(note("Последние записи действующего журнала GAS. Старые записи показывают сотрудника и действие, если они были сохранены; не все из них связаны с конкретным архивным файлом."));if(!j.rows.length)body.append(note("Записей нет."));j.rows.forEach(r=>{const p=panel();p.append(h("b",{},r.action),note(r.date+" · "+r.actor),h("div",{style:"white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px"},r.detail));body.append(p);});}catch(e){if(valid(id))fail(e,()=>list());}}
+  const normName=s=>String(s||"").toLowerCase().replace(/ё/g,"е").replace(/[^a-zа-я0-9]/g,"").replace(/^ртг$/,"rtg");
+  async function detail(id0){const id=start("Читаю редакцию…");try{const j=await history157Post("history_detail",{id:id0});if(!valid(id))return;renderDetail(j);}catch(e){if(valid(id))fail(e,()=>list());}}
+  function renderDetail(j){
+    ++seq;body.replaceChildren(btn("← К списку копий",()=>list()),h("h3",{style:"font-size:17px;margin:12px 0 4px"},(names[j.kind]||j.kind)+" · "+stamp(j.ts)),note((j.actor||"Не записан")+" · "+(statuses[j.status]||j.status)+" · "+(actions[j.action]||j.action)));
+    if(j.error)body.append(note(j.error));
+    if(j.summary&&j.summary.length){const p=panel();p.append(h("b",{},"Изменённые подрядчики / порты"));j.summary.forEach(s=>p.append(note(s.label+": "+stat(s))));body.append(p);}
+    const choose=h("div",{style:"display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:10px 0"});
+    const side=h("select",{class:"field",style:"margin:0;min-width:135px;width:auto"},h("option",{value:"before"},"До операции"),j.hasAfter?h("option",{value:"after"},"После операции"):null);
+    const scope=h("select",{class:"field",style:"margin:0;min-width:180px;max-width:100%;width:auto"});
+    const changes=j.summary||[];
+    let pref=j.scopes.find(s=>hint&&(normName(s.scope)===normName(hint)||normName(s.label)===normName(hint)))||j.scopes.find(s=>changes.some(c=>c.scope===s.scope))||j.scopes[0];
+    if(pref&&!pref.before&&pref.after)side.value="after";
+    function scopes(){const old=scope.value;const arr=j.scopes.filter(s=>side.value==="before"?s.before:s.after);scope.replaceChildren(...arr.map(s=>h("option",{value:s.scope},s.label)));if(arr.some(s=>s.scope===old))scope.value=old;else if(pref&&arr.some(s=>s.scope===pref.scope))scope.value=pref.scope;}
+    side.onchange=()=>{scopes();previewArea.replaceChildren(note("Нажмите «Сравнить» для выбранной редакции."));++seq;};scope.onchange=()=>{previewArea.replaceChildren(note("Нажмите «Сравнить» для выбранного подрядчика."));++seq;};scopes();
+    const previewArea=h("div",{});const compare=btn("Сравнить с текущими",()=>preview(),false);
+    choose.append(ctrl("Редакция",side),ctrl(j.kind==="port"?"Порт":"Подрядчик",scope),compare);body.append(choose,previewArea);
+    if(!j.scopes.length){compare.disabled=true;previewArea.append(note("В этой копии нет тарифов для восстановления."));return;}
+    async function preview(){if(!scope.value){previewArea.replaceChildren(note("Выберите подрядчика."));return;}const sid=++seq,params={id:j.id,side:side.value,scope:scope.value};compare.disabled=true;previewArea.replaceChildren(note("Сравниваю с текущей базой…"));
+      try{const x=await history157Post("history_preview",params);if(!valid(sid))return;previewArea.replaceChildren(note(x.label+" · "+(x.side==="before"?"Редакция до операции":"Редакция после операции")));
+        if(x.historical)previewArea.append(changeTable("Что изменилось при исходной операции",x.historical,false));
+        if(x.revision){const rev=h("details",{style:"margin:10px 0;border:1px solid var(--line);border-radius:10px;padding:9px"},h("summary",{style:"cursor:pointer;font-weight:600"},"Содержимое выбранной редакции · "+x.revision.total));const rr=h("div",{style:"max-height:340px;overflow:auto;margin-top:8px"});x.revision.rows.forEach(z=>rr.append(h("div",{style:"font-size:12px;padding:7px 2px;border-bottom:1px solid var(--line);overflow-wrap:anywhere"},h("b",{},z.label),h("div",{style:"margin-top:3px;white-space:pre-wrap"},z.text))));rev.append(rr);if(x.revision.total>x.revision.rows.length)rev.append(note("Показаны первые "+x.revision.rows.length+" записей. Полные данные можно скачать ниже."));const exportBtn=btn("Скачать редакцию (JSON)",async()=>{exportBtn.disabled=true;try{const z=await history157Post("history_export",params);download(z.name,z.b64);}catch(e){toast(e.message||"Не удалось скачать редакцию");}finally{exportBtn.disabled=false;}});rev.append(exportBtn);previewArea.append(rev);}
+
+        previewArea.append(changeTable("Что изменится при восстановлении",x.diff,true));if(x.warning)previewArea.append(note(x.warning));if(x.compatibility)previewArea.append(note("Восстановление заблокировано: "+x.compatibility));
+        const src=panel();src.append(h("b",{},"Исходные КП · "+x.sourceCount));if(!x.sources.length)src.append(note("В этой редакции нет ссылок на исходные файлы."));x.sources.forEach(f=>{const b=btn(f.available?"Скачать":"Недоступен",async()=>{b.disabled=true;try{const d=await history157Post("history_source",Object.assign({},params,{fileId:f.id}));download(d.name,d.b64);}catch(e){toast(e.message||"Не удалось скачать КП");}finally{b.disabled=!f.available;}});b.disabled=!f.available;src.append(h("div",{style:"display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0"},h("span",{style:"font-size:12px;overflow-wrap:anywhere;min-width:0"},f.name),b));});if(x.sourceCount>x.sources.length)src.append(note("Показаны первые "+x.sources.length+" файлов."));previewArea.append(src);
+        if(x.token){const restore=panel();restore.append(h("b",{},"Восстановление только: "+x.label),note("Остальные подрядчики и порты останутся без изменений. Перед восстановлением создаётся новая резервная копия. Текущий предпросмотр действует 15 минут."));const word=h("input",{class:"field",placeholder:"Введите ВОССТАНОВИТЬ",style:"margin:6px 0"});const go=btn("Восстановить выбранную редакцию",async()=>{if(word.value.trim()!=="ВОССТАНОВИТЬ")return;go.disabled=true;compare.disabled=true;side.disabled=true;scope.disabled=true;word.disabled=true;try{const r=await history157Post("history_restore",{previewId:x.token,confirm:"ВОССТАНОВИТЬ"});if(r.kind==="freight")FR=null;if(r.kind==="port")PORT=null;if(r.kind==="rail")ratesLoaded=false;if(!closed){body.replaceChildren(h("h3",{},"✅ Редакция восстановлена"),note(r.label+" · Остальные подрядчики не изменены."),...(r.historyWarning?[note(r.historyWarning)]:[]),note("Откройте «Расчёт» заново или обновите страницу для проверки ставок."),btn("К истории",()=>{offset=0;list();},false));}}catch(e){if(!closed){restore.append(note(e.message||String(e)));compare.disabled=false;side.disabled=false;scope.disabled=false;word.disabled=false;}}},false);go.disabled=true;word.oninput=()=>{go.disabled=word.value.trim()!=="ВОССТАНОВИТЬ";};restore.append(word,go);previewArea.append(restore);}else if(!x.compatibility)previewArea.append(note(j.canRestore?"Восстанавливать нечего: выбранные записи совпадают с текущими.":"Восстановление доступно только разработчику."));
+      }catch(e){if(valid(sid))previewArea.replaceChildren(note("Не получилось: "+(e.message||e)));}finally{if(!closed)compare.disabled=false;}}
+    preview();
+  }
+  list();
+}
+
 const BOT_HELLO = { me: false, text: "👋 Я Помощник ВМС — ищу доверенности, образцы и инструкции по портам за пару секунд.\nПопробуйте: «доверенность Ромашка», «кфк ВМТП», «документы по порту ВМТП» или «что ты умеешь» 🚀" };
 function buildBot(m) {
   // переписка хранится в этом браузере, чтобы не пропадала при обновлении страницы (очистить: «очисти чат»)
@@ -2120,6 +2200,7 @@ function buildBot(m) {
   quickFill148("🚛 Авто", "расчёт автодоставки");
   quickFill148("📅 Сроки", "что истекает скоро");
   if(isAdmin){quick148.append(h("button",{class:"btn",onclick:()=>openRtg149()},"📥 РТГ · импорт"));quick148.append(h("button",{class:"btn ghost",onclick:()=>clip.click()},"📎 Загрузить файл"));}
+  if(isAdmin)quick148.append(h("button",{class:"btn ghost",onclick:()=>openHistory157()},"🕘 История тарифов"));
   page.append(quick148);
   page.append(log, h("div", { class: "comp", style: "display:flex;gap:8px" }, isAdmin ? clip : null, inp, btn, fileIn)); m.append(page);
   fileIn.onchange = () => { const fs = Array.from(fileIn.files); fileIn.value = ""; uploadMany(fs); };
@@ -2198,6 +2279,7 @@ function buildBot(m) {
       const j = JSON.parse(await resp.text());
       if (j.error) throw new Error(j.error);
       BOT.forEach(b => { if (b.apply === id) b.applied = "✅ Применено"; });
+      if(j.historyWarning)BOT.push({me:false,text:"⚠️ История тарифов: "+j.historyWarning});
       if (isPort) { PORT = null; BOT.push({ me: false, text: "✅ Тарифы порта применены: " + j.port + " (КП " + j.kp + " ст., одиночные " + j.od + " ст., услуг " + j.svc + "). В калькуляторе «⚓ Порт» уже новые цены; у остальных появятся после обновления страницы." }); }
       else if (isFr) { FR = null; BOT.push({ me: false, text: "✅ Фрахт обновлён (" + j.contractor + "): теперь " + j.total + " предложений, заменено старых " + j.replaced + ". У вас калькулятор уже показывает новые цены, у остальных они появятся после обновления страницы или нового захода на сайт." }); }
       else { ratesLoaded = false; loadRates(() => draw());
@@ -2838,6 +2920,8 @@ function buildBot(m) {
   }
   async function ask(qq) {
     let q = (typeof qq === "string" ? qq : inp.value).trim(); if (!q || busy) return; inp.value = ""; window.BOT_DRAFT = "";
+    const historyCmd157 = /^(?:(?:покажи\s+)?(?:истори[яю]|архив)\s+(?:тарифов|ставок|фрахта|жд|портов)(?:\s+(.+))?|восстанови\s+(?:тарифы|ставки|фрахт|жд|порт)(?:\s+(.+))?)$/i.exec(q);
+    if(historyCmd157){BOT.push({me:true,text:q});if(!isAdmin){BOT.push({me:false,text:"История тарифов доступна администраторам."});draw();return;}draw();const k=/(?:^|\s)фрахт/i.test(q)?"freight":/(?:^|\s)жд(?:\s|$)/i.test(q)?"rail":/(?:^|\s)порт/i.test(q)?"port":"";openHistory157(k,historyCmd157[1]||historyCmd157[2]||"");return;}
     const rtgLetter = (/^Обновление мест РТГ\s*$/im.test(q) && /наличи[ея]\s+мест\s+на/i.test(q)) || /Рейс\s+\d+N?\s+ETD/i.test(q) && /Ставка\s+фрахта\s*:/i.test(q) && /Врангель/i.test(q);
     const rtgCommand = /(?:РТГ|RTG)/i.test(q) && /(?:загруз|добав|импорт|залей|встав|обнов|спец\.?\s*тариф)/i.test(q) && /(?:фрахт|тариф|ставк)/i.test(q);
     if (rtgLetter || rtgCommand) {
